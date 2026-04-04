@@ -34,7 +34,7 @@ $ npm run build:linux
 ```
 
 ## 📂 Backend Folder Structure (`src/main/`)
-프론트엔드와 백엔드의 관심사 분리를 위해 백엔드 코드는 역할별로 나뉘어 있습니다.
+
 
 ```text
 src/main/
