@@ -1,34 +1,37 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+// src/main/index.js
+import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
-import Database from 'better-sqlite3'
+import { is } from '@electron-toolkit/utils'
 
+import { initDB } from './database/db'
+import { registerIpcHandlers } from './ipc/ipcRouter'
+
+// 🌟 추가 1: createWindow 함수의 실제 구현부 (앱 창 크기와 옵션 설정)
 function createWindow() {
-  // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    width: 1000,
+    height: 700,
+    show: false, // 로딩 전 깜빡임 방지
+    autoHideMenuBar: true, // 윈도우 상단 메뉴바 숨기기
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      // 보안을 위해 preload.js 연결
+      preload: join(__dirname, '../preload/index.js'), 
       sandbox: false
     }
   })
 
+  // 창이 준비되면 화면에 보여주기
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
 
+  // 외부 링크 클릭 시 시스템 기본 브라우저로 열기
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
+  // Vite를 이용한 개발 환경/배포 환경 분기 로드
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -36,59 +39,20 @@ function createWindow() {
   }
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  initDB()                 // 1. DB 세팅
+  registerIpcHandlers()    // 2. 통신 API 연결
+  createWindow()           // 3. 화면 띄우기
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
-
-   // 🌟 [추가 1] 데이터베이스 세팅 (userData 폴더에 db 생성)
-  const dbPath = join(app.getPath('userData'), 'capstone.db')
-  const db = new Database(dbPath)
-  
-  // 테이블 초기화 (자세 로그, 캘리브레이션 등)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS posture_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      status TEXT,
-      logged_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
-
-  // 🌟 [추가 2] 프론트엔드와 통신할 API (IPC 핸들러) 등록
-  // 프론트엔드에서 'logPostureState'라는 이름으로 상태('Bad', 'Good')를 보내면 DB에 저장합니다.
-  ipcMain.handle('logPostureState', (event, status) => {
-    const stmt = db.prepare('INSERT INTO posture_logs (status) VALUES (?)')
-    const info = stmt.run(status)
-    console.log(`[DB 저장 완료] 상태: ${status}, ID: ${info.lastInsertRowid}`)
-    return { success: true, insertedId: info.lastInsertRowid }
-  })
-
-  createWindow()
-
+  // 🌟 추가 2: macOS 대응 (창이 꺼져도 앱이 실행 중일 때 아이콘 클릭 시 새 창 열기)
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// 🌟 추가 3: 모든 창이 닫혔을 때 앱 완전히 끄기 (macOS 제외)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
