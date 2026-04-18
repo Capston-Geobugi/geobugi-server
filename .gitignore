@@ -8,3 +8,7 @@ out
 *.sqlite
 *.sqlite3
 release
+.env
+.env.*
+coverage
+.vite

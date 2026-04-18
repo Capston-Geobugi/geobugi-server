@@ -1,10 +1,23 @@
-# capstone
+# geobugi
 
-An Electron application with React
+Electron, React, MediaPipe Pose, SQLite를 사용한 웹캠 기반 자세 교정 데스크톱 앱입니다.
 
-## Recommended IDE Setup
+현재 구현 범위는 아래와 같습니다.
 
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+- MediaPipe Pose 기반 상체 자세 측정
+- 개인 기준 자세 캘리브레이션
+- 실시간 자세 상태 분류 (`good` / `warning` / `bad`)
+- 자세 세션 및 상태 로그 저장
+- 스트레칭 미션 기록 API
+- 일간 / 주간 리포트 집계 API
+
+## Tech Stack
+
+- Electron
+- React
+- Vite
+- MediaPipe Tasks Vision
+- SQLite (`better-sqlite3`)
 
 ## Project Setup
 
