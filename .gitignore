@@ -12,3 +12,5 @@ release
 .env.*
 coverage
 .vite
+*.csv
+*.pyc

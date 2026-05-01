@@ -1,3 +1,5 @@
+#이 파일은 분리된 로직의 base 코드입니당 cv_test, cv_main의 코드 참고해서 코드 구현하시면 될거 같아유
+
 import datetime, math, os, time, csv
 import cv2
 import numpy as np
