@@ -24,6 +24,7 @@ import json
 import time
 import os
 import threading
+import base64
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python as mp_python
@@ -45,6 +46,15 @@ def send_to_node(msg_type, payload):
     """Node.js 백엔드로 JSON 데이터를 쏴주는 전송 함수"""
     message = {"type": msg_type, "payload": payload}
     print(json.dumps(message), flush=True)
+
+def send_frame_to_node(frame):
+    """Electron 측정 화면에 표시할 카메라 프레임을 전송"""
+    preview = cv2.resize(frame, (512, 288))
+    ok, encoded = cv2.imencode(".jpg", preview, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
+    if not ok:
+        return
+    jpg_base64 = base64.b64encode(encoded).decode("ascii")
+    send_to_node("FRAME", {"src": f"data:image/jpeg;base64,{jpg_base64}"})
 
 def command_listener():
     """백엔드가 pyProcess.stdin.write()로 보낸 명령을 실시간 recieve"""
@@ -71,6 +81,11 @@ def main():
     show_window = False # 카메라 화면(프리뷰)을 띄울지 여부
 
     cap = cv2.VideoCapture(0) # 카메라 기동
+    if not cap.isOpened():
+        send_to_node("CAMERA_ERROR", "카메라를 열 수 없습니다. 권한 또는 다른 앱의 카메라 사용 여부를 확인해주세요.")
+        return
+
+    last_frame_sent = 0.0
     
     # 2. MediaPipe 로드
     pose_opt = mp_vision.PoseLandmarkerOptions(
@@ -96,13 +111,19 @@ def main():
                         calib_phase = 'running'
                         calib_start = now_t
                         calib_buf = []
-                        show_window = True # 캘리브레이션 때만 카메라 창 띄우기; 피그마 ui를 기반으로 일단 만들어놨어용
+                        show_window = False
                         send_to_node("STATUS", "CALIBRATION_STARTED")
 
                 # [STEP 2] 영상 분석
                 ret, frame = cap.read()
-                if not ret: break
+                if not ret:
+                    send_to_node("CAMERA_ERROR", "카메라 프레임을 읽을 수 없습니다.")
+                    break
                 frame = cv2.flip(frame, 1)
+
+                if now_t - last_frame_sent >= 0.1:
+                    send_frame_to_node(frame)
+                    last_frame_sent = now_t
                 
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)

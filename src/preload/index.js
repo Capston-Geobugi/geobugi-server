@@ -1,4 +1,4 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
@@ -26,6 +26,41 @@ const api = {
   report: {
     getDaily: (input) => electronAPI.ipcRenderer.invoke('report:getDaily', input),
     getWeekly: (input) => electronAPI.ipcRenderer.invoke('report:getWeekly', input)
+  },
+  appWindow: {
+    openCalibration: () => electronAPI.ipcRenderer.invoke('window:openCalibration'),
+    completeCalibration: () => electronAPI.ipcRenderer.invoke('window:completeCalibration'),
+    openHome: () => electronAPI.ipcRenderer.invoke('window:openHome'),
+    onCalibrationCompleted: (callback) => {
+      const listener = () => callback()
+      ipcRenderer.on('calibration:completed', listener)
+
+      return () => {
+        ipcRenderer.removeListener('calibration:completed', listener)
+      }
+    }
+  },
+  cv: {
+    startPreview: () => electronAPI.ipcRenderer.invoke('cv:startPreview'),
+    startCalibration: () => electronAPI.ipcRenderer.invoke('cv:startCalibration'),
+    setSensitivity: (value) => electronAPI.ipcRenderer.invoke('cv:setSensitivity', value),
+    stop: () => electronAPI.ipcRenderer.invoke('cv:stop'),
+    onEvent: (callback) => {
+      const listener = (_event, message) => callback(message)
+      ipcRenderer.on('cv:event', listener)
+
+      return () => {
+        ipcRenderer.removeListener('cv:event', listener)
+      }
+    },
+    onError: (callback) => {
+      const listener = (_event, message) => callback(message)
+      ipcRenderer.on('cv:error', listener)
+
+      return () => {
+        ipcRenderer.removeListener('cv:error', listener)
+      }
+    }
   }
 }
 

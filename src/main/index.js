@@ -1,14 +1,41 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 
 import { initDB } from './database/db'
 import { registerIpcHandlers } from './ipc/ipcRouter'
+import { stopCvProcess } from './controllers/cvController'
 
-function createWindow() {
-  const mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
+let mainWindow = null
+let calibrationWindow = null
+let idleWindow = null
+let calibrationCompleted = false
+
+function getRendererUrl(route = '') {
+  if (is.dev) {
+    return `http://localhost:5173${route}`
+  }
+
+  return null
+}
+
+function loadRenderer(window, route = '') {
+  const rendererUrl = getRendererUrl(route)
+
+  if (rendererUrl) {
+    window.loadURL(rendererUrl)
+    return
+  }
+
+  window.loadFile(join(__dirname, '../renderer/index.html'))
+}
+
+function createMainWindow() {
+  mainWindow = new BrowserWindow({
+    width: 375,
+    height: 812,
+    useContentSize: true,
+    resizable: false,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -21,26 +48,125 @@ function createWindow() {
     mainWindow.show()
   })
 
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  loadRenderer(mainWindow)
+}
+
+function createCalibrationWindow() {
+  if (calibrationWindow) {
+    calibrationWindow.focus()
+    return
   }
+
+  calibrationWindow = new BrowserWindow({
+    width: 800,
+    height: 640,
+    useContentSize: true,
+    resizable: false,
+    parent: mainWindow ?? undefined,
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  calibrationWindow.on('ready-to-show', () => {
+    calibrationWindow.show()
+  })
+
+  calibrationWindow.on('closed', () => {
+    calibrationWindow = null
+    if (!calibrationCompleted) {
+      stopCvProcess()
+    }
+    mainWindow?.focus()
+  })
+
+  loadRenderer(calibrationWindow, '?screen=calibration')
+}
+
+function createIdleWindow() {
+  if (idleWindow) {
+    idleWindow.focus()
+    return
+  }
+
+  const { workArea } = screen.getPrimaryDisplay()
+  const width = 150
+  const height = 250
+
+  idleWindow = new BrowserWindow({
+    width,
+    height,
+    useContentSize: true,
+    x: workArea.x + workArea.width - width - 22,
+    y: workArea.y + workArea.height - height - 22,
+    resizable: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  idleWindow.on('ready-to-show', () => {
+    idleWindow.show()
+  })
+
+  idleWindow.on('closed', () => {
+    idleWindow = null
+  })
+
+  loadRenderer(idleWindow, '?screen=idle')
+}
+
+function registerWindowHandlers() {
+  ipcMain.handle('window:openCalibration', () => {
+    calibrationCompleted = false
+    createCalibrationWindow()
+    return { ok: true }
+  })
+
+  ipcMain.handle('window:completeCalibration', () => {
+    calibrationCompleted = true
+    mainWindow?.webContents.send('calibration:completed')
+    calibrationWindow?.close()
+    mainWindow?.hide()
+    createIdleWindow()
+    return { ok: true }
+  })
+
+  ipcMain.handle('window:openHome', () => {
+    mainWindow?.show()
+    mainWindow?.focus()
+    return { ok: true }
+  })
 }
 
 app.whenReady().then(() => {
   initDB()
   registerIpcHandlers()
-  createWindow()
+  registerWindowHandlers()
+  createMainWindow()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      createMainWindow()
     }
   })
 })
