@@ -41,6 +41,8 @@ FACE_MODEL = os.path.join(BASE_DIR, "models", "face_landmarker.task")
 
 # 백엔드 명령 수신용 전역 큐
 CMD_QUEUE = []
+# 백엔드에서 CV 프로세스를 정상 종료시키기 위한 플래그
+STOP_REQUESTED = False
 
 def send_to_node(msg_type, payload):
     """Node.js 백엔드로 JSON 데이터를 쏴주는 전송 함수"""
@@ -58,12 +60,17 @@ def send_frame_to_node(frame):
 
 def command_listener():
     """백엔드가 pyProcess.stdin.write()로 보낸 명령을 실시간 recieve"""
+    global STOP_REQUESTED
     while True:
         line = sys.stdin.readline()
         if not line: break
         try:
             cmd = json.loads(line)
-            CMD_QUEUE.append(cmd)
+            if cmd.get('type') == 'STOP_PROCESS':
+                # 앱 종료처럼 CV 프로세스 자체를 끝낼 때 사용
+                STOP_REQUESTED = True
+            else:
+                CMD_QUEUE.append(cmd)
         except: pass
 
 def main():
@@ -99,7 +106,8 @@ def main():
           mp_vision.FaceLandmarker.create_from_options(face_opt) as flm):
         
         try:
-            while cap.isOpened():
+            # STOP_PROCESS 명령을 받으면 finally로 내려가 카메라/리소스를 정리
+            while cap.isOpened() and not STOP_REQUESTED:
                 now_t = time.time()
 
                 # [STEP 1] 백엔드에서 시킨 일 처리 (민감도 조절, 캘리브레이션 시작 등)

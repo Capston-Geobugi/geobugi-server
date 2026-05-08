@@ -124,6 +124,21 @@ button {
   background: linear-gradient(90deg, #ffb243 0%, #ffd38f 100%);
 }
 
+.progress-bar-indeterminate {
+  width: 38%;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-105%);
+  }
+
+  100% {
+    transform: translateX(265%);
+  }
+}
+
 .workspace-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
@@ -164,6 +179,34 @@ button {
   background: linear-gradient(180deg, #182127 0%, #0b1013 100%);
 }
 
+.backend-stage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 22px;
+  min-height: 260px;
+  padding: 28px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #182127 0%, #0b1013 100%);
+}
+
+.stage-number {
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: rgba(255, 178, 67, 0.14);
+  color: #ffcf8a;
+  font-size: 64px;
+  font-weight: 800;
+}
+
+.stage-label {
+  font-size: 28px;
+  font-weight: 700;
+}
+
 .camera-video,
 .camera-canvas {
   position: absolute;
@@ -190,6 +233,11 @@ button {
   border-radius: 18px;
   background: rgba(200, 38, 38, 0.82);
   color: white;
+}
+
+.feedback-overlay-static {
+  position: static;
+  margin-top: 14px;
 }
 
 .feedback-active .camera-canvas {
@@ -301,5 +349,16 @@ button {
 
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .backend-stage {
+    grid-template-columns: 1fr;
+    min-height: 220px;
+  }
+
+  .stage-number {
+    width: 104px;
+    height: 104px;
+    font-size: 52px;
   }
 }

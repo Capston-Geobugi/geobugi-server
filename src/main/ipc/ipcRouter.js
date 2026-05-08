@@ -14,9 +14,12 @@ import {
 } from '../controllers/postureController'
 import { getDailyReport, getWeeklyReport } from '../controllers/reportController'
 import {
+  attachCvSession,
+  getCvStatus,
   setCvSensitivity,
   startCvCalibration,
   startCvPreview,
+  startCvProcess,
   stopCvProcess
 } from '../controllers/cvController'
 import {
@@ -54,8 +57,11 @@ export function registerIpcHandlers() {
   ipcMain.handle('report:getDaily', (_event, input) => getDailyReport(input))
   ipcMain.handle('report:getWeekly', (_event, input) => getWeeklyReport(input))
 
-  ipcMain.handle('cv:startCalibration', () => startCvCalibration())
+  ipcMain.handle('cv:start', () => startCvProcess())
   ipcMain.handle('cv:startPreview', () => startCvPreview())
-  ipcMain.handle('cv:setSensitivity', (_event, value) => setCvSensitivity(value))
+  ipcMain.handle('cv:startCalibration', () => startCvCalibration())
   ipcMain.handle('cv:stop', () => stopCvProcess())
+  ipcMain.handle('cv:getStatus', () => getCvStatus())
+  ipcMain.handle('cv:attachSession', (_event, sessionId) => attachCvSession(sessionId))
+  ipcMain.handle('cv:setSensitivity', (_event, value) => setCvSensitivity(value))
 }

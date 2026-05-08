@@ -1,4 +1,4 @@
-import { getDB, withTransaction } from '../database/db'
+import { getDB } from '../database/db'
 
 let currentSessionId = null
 
@@ -84,7 +84,7 @@ export function getCurrentSession() {
   return row ? { sessionId: Number(row.id) } : null
 }
 
-const logStateTransaction = withTransaction((input) => {
+export function logState(input) {
   const database = getDB()
   const {
     sessionId,
@@ -145,10 +145,6 @@ const logStateTransaction = withTransaction((input) => {
   }
 
   return { ok: true }
-})
-
-export function logState(input) {
-  return logStateTransaction(input)
 }
 
 export function getRecentPostureEvents({ limit = 20 } = {}) {

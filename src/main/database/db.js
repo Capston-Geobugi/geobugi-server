@@ -64,6 +64,16 @@ function runMigrations(database) {
       FOREIGN KEY (session_id) REFERENCES posture_sessions(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS cv_posture_samples (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER,
+      measured_at TEXT NOT NULL,
+      rep_value REAL NOT NULL,
+      raw_payload TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (session_id) REFERENCES posture_sessions(id) ON DELETE SET NULL
+    );
+
     CREATE TABLE IF NOT EXISTS stretching_missions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id INTEGER,
@@ -82,6 +92,10 @@ function runMigrations(database) {
       ON posture_events(session_id);
     CREATE INDEX IF NOT EXISTS idx_posture_events_started_at
       ON posture_events(started_at);
+    CREATE INDEX IF NOT EXISTS idx_cv_posture_samples_session_id
+      ON cv_posture_samples(session_id);
+    CREATE INDEX IF NOT EXISTS idx_cv_posture_samples_measured_at
+      ON cv_posture_samples(measured_at);
     CREATE INDEX IF NOT EXISTS idx_stretching_missions_started_at
       ON stretching_missions(started_at);
   `)
@@ -92,9 +106,54 @@ function runMigrations(database) {
     .map((row) => row.name)
 
   if (!calibrationColumns.includes('ear_width_ratio')) {
-    database.exec(
-      'ALTER TABLE calibrations ADD COLUMN ear_width_ratio REAL NOT NULL DEFAULT 0'
-    )
+    database.exec('ALTER TABLE calibrations ADD COLUMN ear_width_ratio REAL NOT NULL DEFAULT 0')
+  }
+
+  const cvSampleSessionColumn = database
+    .prepare("SELECT * FROM pragma_table_info('cv_posture_samples')")
+    .all()
+    .find((row) => row.name === 'session_id')
+
+  if (cvSampleSessionColumn?.notnull) {
+    database.exec(`
+      ALTER TABLE cv_posture_samples RENAME TO cv_posture_samples_old;
+
+      CREATE TABLE cv_posture_samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER,
+        measured_at TEXT NOT NULL,
+        rep_value REAL NOT NULL,
+        raw_payload TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES posture_sessions(id) ON DELETE SET NULL
+      );
+
+      INSERT INTO cv_posture_samples (
+        id,
+        session_id,
+        measured_at,
+        rep_value,
+        raw_payload,
+        created_at
+      )
+      SELECT
+        id,
+        session_id,
+        measured_at,
+        rep_value,
+        raw_payload,
+        created_at
+      FROM cv_posture_samples_old;
+
+      DROP TABLE cv_posture_samples_old;
+    `)
+
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_cv_posture_samples_session_id
+        ON cv_posture_samples(session_id);
+      CREATE INDEX IF NOT EXISTS idx_cv_posture_samples_measured_at
+        ON cv_posture_samples(measured_at);
+    `)
   }
 }
 
