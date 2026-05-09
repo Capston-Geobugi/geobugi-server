@@ -41,25 +41,22 @@ const api = {
     }
   },
   cv: {
+    start: () => electronAPI.ipcRenderer.invoke('cv:start'),
     startPreview: () => electronAPI.ipcRenderer.invoke('cv:startPreview'),
     startCalibration: () => electronAPI.ipcRenderer.invoke('cv:startCalibration'),
-    setSensitivity: (value) => electronAPI.ipcRenderer.invoke('cv:setSensitivity', value),
     stop: () => electronAPI.ipcRenderer.invoke('cv:stop'),
+    getStatus: () => electronAPI.ipcRenderer.invoke('cv:getStatus'),
+    attachSession: (sessionId) => electronAPI.ipcRenderer.invoke('cv:attachSession', sessionId),
+    setSensitivity: (value) => electronAPI.ipcRenderer.invoke('cv:setSensitivity', value),
     onEvent: (callback) => {
       const listener = (_event, message) => callback(message)
       ipcRenderer.on('cv:event', listener)
-
-      return () => {
-        ipcRenderer.removeListener('cv:event', listener)
-      }
+      return () => ipcRenderer.removeListener('cv:event', listener)
     },
     onError: (callback) => {
       const listener = (_event, message) => callback(message)
       ipcRenderer.on('cv:error', listener)
-
-      return () => {
-        ipcRenderer.removeListener('cv:error', listener)
-      }
+      return () => ipcRenderer.removeListener('cv:error', listener)
     }
   }
 }

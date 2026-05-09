@@ -1,11 +1,59 @@
 import { getDB } from '../database/db'
 
-function createEmptyDailyReport(date) {
+const SAMPLE_DURATION_SEC = 60
+
+function toNumberOrNull(value) {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+function toPostureScore(repValue) {
+  const numberValue = toNumberOrNull(repValue)
+  if (numberValue === null) {
+    return null
+  }
+
+  return Math.max(0, Math.min(100, Math.round(100 - numberValue)))
+}
+
+function createCvStats(samples) {
+  if (samples.length === 0) {
+    return {
+      sampleCount: 0,
+      averageRepValue: null,
+      minRepValue: null,
+      maxRepValue: null,
+      latestRepValue: null,
+      averageScore: null,
+      latestScore: null
+    }
+  }
+
+  const repValues = samples.map((sample) => sample.repValue)
+  const latestSample = samples[samples.length - 1]
+  const averageRepValue = repValues.reduce((total, value) => total + value, 0) / repValues.length
+
+  return {
+    sampleCount: samples.length,
+    averageRepValue,
+    minRepValue: Math.min(...repValues),
+    maxRepValue: Math.max(...repValues),
+    latestRepValue: latestSample.repValue,
+    averageScore: toPostureScore(averageRepValue),
+    latestScore: latestSample.score
+  }
+}
+
+function createReportFromSamples(date, samples) {
+  const cvStats = createCvStats(samples)
+  const totalDurationSec = cvStats.sampleCount * SAMPLE_DURATION_SEC
+  const scoreRatio = cvStats.averageScore === null ? 0 : cvStats.averageScore / 100
+
   return {
     date,
-    totalDurationSec: 0,
+    totalDurationSec,
     stateRatio: {
-      good: 0,
+      good: scoreRatio,
       warning: 0,
       bad: 0
     },
@@ -13,116 +61,90 @@ function createEmptyDailyReport(date) {
     badEventCount: 0,
     longestBadDurationSec: 0,
     stretchingCompletedCount: 0,
-    stretchingSkippedCount: 0
+    stretchingSkippedCount: 0,
+    cvStats,
+    samples
   }
+}
+
+function getDailyCvSamples(database, date) {
+  const rows = database
+    .prepare(
+      `
+        SELECT measured_at, rep_value
+        FROM cv_posture_samples
+        WHERE date(measured_at) = date(?)
+        ORDER BY measured_at ASC, id ASC
+      `
+    )
+    .all(date)
+
+  return rows
+    .map((row) => {
+      const repValue = toNumberOrNull(row.rep_value)
+      if (repValue === null) {
+        return null
+      }
+
+      return {
+        measuredAt: row.measured_at,
+        repValue,
+        score: toPostureScore(repValue)
+      }
+    })
+    .filter(Boolean)
 }
 
 export function getDailyReport({ date } = {}) {
   const database = getDB()
-  const report = createEmptyDailyReport(date)
+  const targetDate = date ?? new Date().toISOString().slice(0, 10)
+  const samples = getDailyCvSamples(database, targetDate)
 
-  const postureStats = database
-    .prepare(
-      `
-        SELECT
-          COALESCE(SUM(duration_sec), 0) AS total_duration_sec,
-          COALESCE(SUM(CASE WHEN state = 'good' THEN duration_sec ELSE 0 END), 0) AS good_duration_sec,
-          COALESCE(SUM(CASE WHEN state = 'warning' THEN duration_sec ELSE 0 END), 0) AS warning_duration_sec,
-          COALESCE(SUM(CASE WHEN state = 'bad' THEN duration_sec ELSE 0 END), 0) AS bad_duration_sec,
-          COALESCE(SUM(CASE WHEN state = 'warning' THEN 1 ELSE 0 END), 0) AS warning_count,
-          COALESCE(SUM(CASE WHEN state = 'bad' THEN 1 ELSE 0 END), 0) AS bad_event_count,
-          COALESCE(MAX(CASE WHEN state = 'bad' THEN duration_sec ELSE 0 END), 0) AS longest_bad_duration_sec
-        FROM posture_events
-        WHERE date(started_at) = date(?)
-      `
-    )
-    .get(date)
-
-  const stretchingStats = database
-    .prepare(
-      `
-        SELECT
-          COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_count,
-          COALESCE(SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END), 0) AS skipped_count
-        FROM stretching_missions
-        WHERE date(started_at) = date(?)
-      `
-    )
-    .get(date)
-
-  report.totalDurationSec = postureStats.total_duration_sec
-  report.warningCount = postureStats.warning_count
-  report.badEventCount = postureStats.bad_event_count
-  report.longestBadDurationSec = postureStats.longest_bad_duration_sec
-  report.stretchingCompletedCount = stretchingStats.completed_count
-  report.stretchingSkippedCount = stretchingStats.skipped_count
-
-  if (report.totalDurationSec > 0) {
-    report.stateRatio = {
-      good: postureStats.good_duration_sec / report.totalDurationSec,
-      warning: postureStats.warning_duration_sec / report.totalDurationSec,
-      bad: postureStats.bad_duration_sec / report.totalDurationSec
-    }
-  }
-
-  return report
+  return createReportFromSamples(targetDate, samples)
 }
 
 export function getWeeklyReport({ startDate, endDate } = {}) {
   const database = getDB()
-  const dailyRows = database
+  const rows = database
     .prepare(
       `
         SELECT
-          date(started_at) AS date,
-          COALESCE(SUM(duration_sec), 0) AS total_duration_sec,
-          COALESCE(SUM(CASE WHEN state = 'good' THEN duration_sec ELSE 0 END), 0) AS good_duration_sec,
-          COALESCE(SUM(CASE WHEN state = 'warning' THEN duration_sec ELSE 0 END), 0) AS warning_duration_sec,
-          COALESCE(SUM(CASE WHEN state = 'bad' THEN duration_sec ELSE 0 END), 0) AS bad_duration_sec,
-          COALESCE(SUM(CASE WHEN state = 'warning' THEN 1 ELSE 0 END), 0) AS warning_count,
-          COALESCE(SUM(CASE WHEN state = 'bad' THEN 1 ELSE 0 END), 0) AS bad_event_count
-        FROM posture_events
-        WHERE date(started_at) BETWEEN date(?) AND date(?)
-        GROUP BY date(started_at)
-        ORDER BY date(started_at) ASC
+          date(measured_at) AS date,
+          COUNT(*) AS sample_count,
+          AVG(rep_value) AS average_rep_value,
+          MIN(rep_value) AS min_rep_value,
+          MAX(rep_value) AS max_rep_value
+        FROM cv_posture_samples
+        WHERE date(measured_at) BETWEEN date(?) AND date(?)
+        GROUP BY date(measured_at)
+        ORDER BY date(measured_at) ASC
       `
     )
     .all(startDate, endDate)
 
-  const stretchingRows = database
-    .prepare(
-      `
-        SELECT
-          date(started_at) AS date,
-          COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_count,
-          COALESCE(SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END), 0) AS skipped_count
-        FROM stretching_missions
-        WHERE date(started_at) BETWEEN date(?) AND date(?)
-        GROUP BY date(started_at)
-      `
-    )
-    .all(startDate, endDate)
-
-  const stretchingByDate = new Map(stretchingRows.map((row) => [row.date, row]))
-
-  const days = dailyRows.map((row) => {
-    const stretchRow = stretchingByDate.get(row.date)
-    const totalDurationSec = row.total_duration_sec
+  const days = rows.map((row) => {
+    const averageScore = toPostureScore(row.average_rep_value)
+    const totalDurationSec = row.sample_count * SAMPLE_DURATION_SEC
 
     return {
       date: row.date,
       totalDurationSec,
-      stateRatio: totalDurationSec
-        ? {
-            good: row.good_duration_sec / totalDurationSec,
-            warning: row.warning_duration_sec / totalDurationSec,
-            bad: row.bad_duration_sec / totalDurationSec
-          }
-        : { good: 0, warning: 0, bad: 0 },
-      warningCount: row.warning_count,
-      badEventCount: row.bad_event_count,
-      stretchingCompletedCount: stretchRow?.completed_count ?? 0,
-      stretchingSkippedCount: stretchRow?.skipped_count ?? 0
+      stateRatio: {
+        good: averageScore === null ? 0 : averageScore / 100,
+        warning: 0,
+        bad: 0
+      },
+      warningCount: 0,
+      badEventCount: 0,
+      stretchingCompletedCount: 0,
+      stretchingSkippedCount: 0,
+      cvStats: {
+        sampleCount: row.sample_count,
+        averageRepValue: row.average_rep_value,
+        minRepValue: row.min_rep_value,
+        maxRepValue: row.max_rep_value,
+        averageScore
+      }
     }
   })
 
