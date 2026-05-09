@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 
 const BAD_STAGE_THRESHOLD = 7
+const SCREEN = new URLSearchParams(window.location.search).get('screen')
 
 function App() {
   const [ready, setReady] = useState(false)
@@ -56,6 +57,10 @@ function App() {
         setCalibrationBaseline(message.payload?.baseline ?? null)
         setCalibrating(false)
         setStatusText('Calibration complete. You can start monitoring now.')
+
+        if (SCREEN === 'calibration') {
+          void window.api.appWindow.completeCalibration()
+        }
       }
 
       if (message.type === 'STATUS') {
@@ -113,7 +118,6 @@ function App() {
   async function handleMonitoringToggle() {
     if (monitoring) {
       const endedAt = new Date().toISOString()
-      await window.api.cv.flushSession()
       await window.api.cv.attachSession(null)
 
       if (sessionId) {
@@ -126,7 +130,7 @@ function App() {
 
       setMonitoring(false)
       setSessionId(null)
-      setStatusText('Monitoring stopped. Backend CV report has been saved.')
+      setStatusText('Monitoring stopped.')
       await refreshReports()
       return
     }
