@@ -2,6 +2,22 @@ import { getDB } from '../database/db'
 
 const SAMPLE_DURATION_SEC = 60
 
+function toLocalIsoDate(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function getPreviousIsoDate(date) {
+  const [year, month, day] = date.split('-').map(Number)
+  const previousDate = new Date(Date.UTC(year, month - 1, day))
+  previousDate.setUTCDate(previousDate.getUTCDate() - 1)
+
+  return previousDate.toISOString().slice(0, 10)
+}
+
 function toNumberOrNull(value) {
   const numberValue = Number(value)
   return Number.isFinite(numberValue) ? numberValue : null
@@ -13,7 +29,8 @@ function toPostureScore(repValue) {
     return null
   }
 
-  return Math.max(0, Math.min(100, Math.round(100 - numberValue)))
+  const score = Math.max(0, Math.min(100, 100 - numberValue))
+  return Number(score.toFixed(1))
 }
 
 function createCvStats(samples) {
@@ -44,10 +61,47 @@ function createCvStats(samples) {
   }
 }
 
-function createReportFromSamples(date, samples) {
+function createScoreTrend(samples) {
+  return samples.map((sample) => ({
+    measuredAt: sample.measuredAt,
+    score: sample.score,
+    repValue: sample.repValue
+  }))
+}
+
+function createAverageScoreSummary(date, samples) {
+  const cvStats = createCvStats(samples)
+
+  return {
+    date,
+    averageScore: cvStats.averageScore,
+    averageRepValue: cvStats.averageRepValue,
+    sampleCount: cvStats.sampleCount
+  }
+}
+
+function createAverageScoreComparison(today, yesterday) {
+  const hasBothScores = today.averageScore !== null && yesterday.averageScore !== null
+  const diff = hasBothScores ? today.averageScore - yesterday.averageScore : null
+  const diffRate =
+    hasBothScores && yesterday.averageScore !== 0 ? diff / yesterday.averageScore : null
+
+  return {
+    today,
+    yesterday,
+    diff,
+    diffRate,
+    direction: diff === null ? 'none' : diff > 0 ? 'up' : diff < 0 ? 'down' : 'same'
+  }
+}
+
+function createReportFromSamples(date, samples, yesterdaySamples = []) {
   const cvStats = createCvStats(samples)
   const totalDurationSec = cvStats.sampleCount * SAMPLE_DURATION_SEC
   const scoreRatio = cvStats.averageScore === null ? 0 : cvStats.averageScore / 100
+  const yesterdayDate = getPreviousIsoDate(date)
+  const todayScoreSummary = createAverageScoreSummary(date, samples)
+  const yesterdayScoreSummary = createAverageScoreSummary(yesterdayDate, yesterdaySamples)
 
   return {
     date,
@@ -63,6 +117,8 @@ function createReportFromSamples(date, samples) {
     stretchingCompletedCount: 0,
     stretchingSkippedCount: 0,
     cvStats,
+    scoreTrend: createScoreTrend(samples),
+    averageScoreComparison: createAverageScoreComparison(todayScoreSummary, yesterdayScoreSummary),
     samples
   }
 }
@@ -97,10 +153,12 @@ function getDailyCvSamples(database, date) {
 
 export function getDailyReport({ date } = {}) {
   const database = getDB()
-  const targetDate = date ?? new Date().toISOString().slice(0, 10)
+  const targetDate = date ?? toLocalIsoDate()
+  const yesterdayDate = getPreviousIsoDate(targetDate)
   const samples = getDailyCvSamples(database, targetDate)
+  const yesterdaySamples = getDailyCvSamples(database, yesterdayDate)
 
-  return createReportFromSamples(targetDate, samples)
+  return createReportFromSamples(targetDate, samples, yesterdaySamples)
 }
 
 export function getWeeklyReport({ startDate, endDate } = {}) {
