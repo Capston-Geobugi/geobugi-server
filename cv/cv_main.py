@@ -25,6 +25,8 @@ import time
 import os
 import threading
 import base64
+import platform
+import subprocess
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python as mp_python
@@ -44,6 +46,10 @@ CMD_QUEUE = []
 # 백엔드에서 CV 프로세스를 정상 종료시키기 위한 플래그
 STOP_REQUESTED = False
 
+IPHONE_CAMERA_KEYWORDS = ("iphone", "continuity camera")
+BUILT_IN_CAMERA_KEYWORDS = ("facetime", "built-in", "macbook", "isight")
+MAX_CAMERA_INDEX = 6
+
 def send_to_node(msg_type, payload):
     """Node.js 백엔드로 JSON 데이터를 쏴주는 전송 함수"""
     message = {"type": msg_type, "payload": payload}
@@ -57,6 +63,158 @@ def send_frame_to_node(frame):
         return
     jpg_base64 = base64.b64encode(encoded).decode("ascii")
     send_to_node("FRAME", {"src": f"data:image/jpeg;base64,{jpg_base64}"})
+
+def is_macos():
+    return platform.system() == "Darwin"
+
+def is_windows():
+    return platform.system() == "Windows"
+
+def collect_camera_names(value):
+    if isinstance(value, dict):
+        names = []
+        camera_name = value.get("_name")
+        if isinstance(camera_name, str):
+            names.append(camera_name)
+
+        for child_value in value.values():
+            names.extend(collect_camera_names(child_value))
+
+        return names
+
+    if isinstance(value, list):
+        names = []
+        for item in value:
+            names.extend(collect_camera_names(item))
+
+        return names
+
+    return []
+
+def get_macos_camera_names():
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPCameraDataType", "-json"],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=4
+        )
+        names = collect_camera_names(json.loads(result.stdout))
+    except Exception as error:
+        send_to_node("LOG", f"Camera list lookup failed: {error}")
+        return []
+
+    unique_names = []
+    for name in names:
+        if name not in unique_names:
+            unique_names.append(name)
+
+    return unique_names
+
+def get_windows_camera_names():
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance Win32_PnPEntity | "
+                "Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' } | "
+                "Select-Object -ExpandProperty Name | ConvertTo-Json"
+            ],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=4
+        )
+        parsed_names = json.loads(result.stdout) if result.stdout.strip() else []
+    except Exception as error:
+        send_to_node("LOG", f"Camera list lookup failed: {error}")
+        return []
+
+    if isinstance(parsed_names, str):
+        return [parsed_names]
+
+    if isinstance(parsed_names, list):
+        return [name for name in parsed_names if isinstance(name, str)]
+
+    return []
+
+def get_camera_names():
+    if is_macos():
+        return get_macos_camera_names()
+
+    if is_windows():
+        return get_windows_camera_names()
+
+    return []
+
+def is_iphone_camera(camera_name):
+    normalized_name = camera_name.lower()
+    return any(keyword in normalized_name for keyword in IPHONE_CAMERA_KEYWORDS)
+
+def is_builtin_camera(camera_name):
+    normalized_name = camera_name.lower()
+    return any(keyword in normalized_name for keyword in BUILT_IN_CAMERA_KEYWORDS)
+
+def get_camera_index_order(camera_names):
+    index_count = max(MAX_CAMERA_INDEX, len(camera_names))
+    candidate_indexes = list(range(index_count))
+
+    if not camera_names:
+        if is_macos():
+            # Continuity Camera is often exposed as index 0 when macOS does not
+            # return camera names. Try built-in/other indexes first and keep 0
+            # only as the final fallback.
+            return candidate_indexes[1:] + candidate_indexes[:1]
+
+        return candidate_indexes
+
+    allowed_indexes = []
+    preferred_indexes = []
+
+    for index in candidate_indexes:
+        camera_name = camera_names[index] if index < len(camera_names) else ""
+        if camera_name and is_iphone_camera(camera_name):
+            send_to_node("LOG", f"Skipping iPhone camera: index={index}, name={camera_name}")
+            continue
+
+        if camera_name and is_builtin_camera(camera_name):
+            preferred_indexes.append(index)
+        else:
+            allowed_indexes.append(index)
+
+    return preferred_indexes + allowed_indexes
+
+def create_video_capture(camera_index):
+    if is_macos() and hasattr(cv2, "CAP_AVFOUNDATION"):
+        return cv2.VideoCapture(camera_index, cv2.CAP_AVFOUNDATION)
+
+    if is_windows() and hasattr(cv2, "CAP_DSHOW"):
+        return cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+
+    return cv2.VideoCapture(camera_index)
+
+def open_preferred_camera():
+    camera_names = get_camera_names()
+    camera_indexes = get_camera_index_order(camera_names)
+
+    for camera_index in camera_indexes:
+        cap = create_video_capture(camera_index)
+        if not cap.isOpened():
+            cap.release()
+            continue
+
+        ret, _frame = cap.read()
+        if ret:
+            camera_name = camera_names[camera_index] if camera_index < len(camera_names) else "unknown"
+            send_to_node("LOG", f"Using camera: index={camera_index}, name={camera_name}")
+            return cap
+
+        cap.release()
+
+    return None
 
 def command_listener():
     """백엔드가 pyProcess.stdin.write()로 보낸 명령을 실시간 recieve"""
@@ -87,9 +245,9 @@ def main():
     calib_buf = []
     show_window = False # 카메라 화면(프리뷰)을 띄울지 여부
 
-    cap = cv2.VideoCapture(0) # 카메라 기동
-    if not cap.isOpened():
-        send_to_node("CAMERA_ERROR", "카메라를 열 수 없습니다. 권한 또는 다른 앱의 카메라 사용 여부를 확인해주세요.")
+    cap = open_preferred_camera() # 카메라 기동
+    if cap is None:
+        send_to_node("CAMERA_ERROR", "iPhone 카메라를 제외한 사용 가능한 카메라를 찾을 수 없습니다. MacBook 내장 카메라 권한 또는 다른 앱의 카메라 사용 여부를 확인해주세요.")
         return
 
     last_frame_sent = 0.0
