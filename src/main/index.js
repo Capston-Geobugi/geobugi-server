@@ -34,8 +34,10 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 375,
     height: 812,
+    minWidth: 360,
+    minHeight: 640,
     useContentSize: true,
-    resizable: false,
+    resizable: true,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -69,8 +71,10 @@ function createCalibrationWindow() {
   calibrationWindow = new BrowserWindow({
     width: 800,
     height: 640,
+    minWidth: 640,
+    minHeight: 520,
     useContentSize: true,
-    resizable: false,
+    resizable: true,
     parent: mainWindow ?? undefined,
     show: false,
     autoHideMenuBar: true,
