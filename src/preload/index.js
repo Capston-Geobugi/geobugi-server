@@ -25,6 +25,7 @@ const api = {
   },
   report: {
     getDaily: (input) => electronAPI.ipcRenderer.invoke('report:getDaily', input),
+    getMonthly: (input) => electronAPI.ipcRenderer.invoke('report:getMonthly', input),
     getWeekly: (input) => electronAPI.ipcRenderer.invoke('report:getWeekly', input)
   },
   appWindow: {

@@ -18,6 +18,31 @@ function getPreviousIsoDate(date) {
   return previousDate.toISOString().slice(0, 10)
 }
 
+function getMonthBounds(year, month) {
+  const startDate = new Date(year, month - 1, 1)
+  const endDate = new Date(year, month, 0)
+
+  return {
+    startDate: toLocalIsoDate(startDate),
+    endDate: toLocalIsoDate(endDate)
+  }
+}
+
+function normalizeMonthInput({ year, month } = {}) {
+  const today = new Date()
+  const normalizedYear = Number.isInteger(Number(year)) ? Number(year) : today.getFullYear()
+  const normalizedMonth = Number.isInteger(Number(month)) ? Number(month) : today.getMonth() + 1
+
+  if (normalizedMonth < 1 || normalizedMonth > 12) {
+    throw new Error('month must be between 1 and 12.')
+  }
+
+  return {
+    year: normalizedYear,
+    month: normalizedMonth
+  }
+}
+
 function toNumberOrNull(value) {
   const numberValue = Number(value)
   return Number.isFinite(numberValue) ? numberValue : null
@@ -159,6 +184,31 @@ export function getDailyReport({ date } = {}) {
   const yesterdaySamples = getDailyCvSamples(database, yesterdayDate)
 
   return createReportFromSamples(targetDate, samples, yesterdaySamples)
+}
+
+export function getMonthlyReport(input = {}) {
+  const database = getDB()
+  const { year, month } = normalizeMonthInput(input)
+  const { startDate, endDate } = getMonthBounds(year, month)
+  const rows = database
+    .prepare(
+      `
+        SELECT date(measured_at) AS date
+        FROM cv_posture_samples
+        WHERE date(measured_at) BETWEEN date(?) AND date(?)
+        GROUP BY date(measured_at)
+        ORDER BY date(measured_at) ASC
+      `
+    )
+    .all(startDate, endDate)
+
+  return {
+    year,
+    month,
+    startDate,
+    endDate,
+    reportDates: rows.map((row) => row.date)
+  }
 }
 
 export function getWeeklyReport({ startDate, endDate } = {}) {

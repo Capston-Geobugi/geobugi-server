@@ -12,7 +12,7 @@ import {
   logState,
   startSession
 } from '../controllers/postureController'
-import { getDailyReport, getWeeklyReport } from '../controllers/reportController'
+import { getDailyReport, getMonthlyReport, getWeeklyReport } from '../controllers/reportController'
 import {
   attachCvSession,
   getCvStatus,
@@ -55,6 +55,7 @@ export function registerIpcHandlers() {
   ipcMain.handle('stretching:getPending', () => getPendingMissions())
 
   ipcMain.handle('report:getDaily', (_event, input) => getDailyReport(input))
+  ipcMain.handle('report:getMonthly', (_event, input) => getMonthlyReport(input))
   ipcMain.handle('report:getWeekly', (_event, input) => getWeeklyReport(input))
 
   ipcMain.handle('cv:start', () => startCvProcess())
