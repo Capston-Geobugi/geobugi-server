@@ -498,6 +498,7 @@ button:disabled {
 }
 
 .chart-area {
+  position: relative;
   min-width: 0;
 }
 
@@ -539,19 +540,44 @@ button:disabled {
   stroke-width: 2;
 }
 
-.chart-labels {
-  display: flex;
-  justify-content: space-between;
-  color: #8ba0b8;
-  font-size: 11px;
-  font-weight: 800;
+.chart-hover-zone {
+  fill: transparent;
+  cursor: crosshair;
 }
 
-.daily-report-screen .chart-labels {
-  padding: 0 5px;
-  color: #8ba0b8;
+.chart-x-label {
+  fill: #8ba0b8;
   font-size: 13px;
   font-weight: 700;
+  pointer-events: none;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  min-width: 72px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: #fff;
+  background: #18bd84;
+  box-shadow: 0 8px 18px rgba(26, 44, 65, 0.16);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 8px));
+}
+
+.chart-tooltip strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.chart-tooltip.empty {
+  color: #60728b;
+  background: #e8eef5;
 }
 
 .score-card h2,

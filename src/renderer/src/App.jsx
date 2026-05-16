@@ -88,6 +88,16 @@ function App() {
   }, [bootstrapServerState])
 
   useEffect(() => {
+    if (screen !== 'report') {
+      return
+    }
+
+    queueMicrotask(() => {
+      void refreshReport()
+    })
+  }, [refreshReport, screen])
+
+  useEffect(() => {
     document.body.dataset.screen = screen
 
     return () => {

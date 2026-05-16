@@ -21,60 +21,88 @@ function formatKoreanDate(dateText) {
 }
 
 function toChartPoint(item, index, totalCount) {
-  const width = 273
-  const measuredDate = new Date(item.measuredAt)
-  const hour = measuredDate.getHours() + measuredDate.getMinutes() / 60
-  const fallbackPosition = index / Math.max(1, totalCount - 1)
-  const timePosition = Number.isNaN(measuredDate.getTime())
-    ? fallbackPosition
-    : Math.min(1, Math.max(0, (hour - 9) / 9))
-  const x = 15 + width * timePosition
-
-  if (typeof item.score !== 'number') {
-    return {
-      x,
-      y: 118,
-      hasData: false
-    }
-  }
+  const left = 4
+  const width = 292
+  const timePosition = totalCount <= 1 ? 0.5 : index / (totalCount - 1)
+  const x = left + width * timePosition
+  const hasData = typeof item.score === 'number'
 
   return {
     x,
-    y: 122 - Math.min(1, Math.max(0, item.score / 100)) * 112,
-    hasData: true
+    y: hasData ? 122 - Math.min(1, Math.max(0, item.score / 100)) * 112 : 122,
+    hasData,
+    ...item
   }
 }
 
 function createTrendPath(trend) {
-  if (!Array.isArray(trend) || trend.length < 2) {
+  if (!Array.isArray(trend) || trend.length === 0) {
     return {
-      dataSegments: [],
-      fills: [],
-      dataPoints: []
+      line: '',
+      fill: '',
+      dataPoints: [],
+      labels: [],
+      hoverSlots: []
     }
   }
 
-  const points = trend.map((item, index) => toChartPoint(item, index, trend.length))
-  const dataSegments = []
-  const fills = []
-  const pointsWithData = points.filter((point) => point.hasData)
+  const trendByHour = new Map(trend.map((item) => [new Date(item.measuredAt).getHours(), item]))
+  const hours = [...trendByHour.keys()].sort((hourA, hourB) => hourA - hourB)
+  const firstHour = hours[0]
+  const lastHour = hours[hours.length - 1]
+  const slots = Array.from({ length: lastHour - firstHour + 1 }, (_, index) => {
+    const hour = firstHour + index
+    const item = trendByHour.get(hour)
 
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const currentPoint = points[index]
-    const nextPoint = points[index + 1]
+    return {
+      measuredAt:
+        item?.measuredAt ??
+        `${trend[0].measuredAt.slice(0, 10)}T${String(hour).padStart(2, '0')}:00:00`,
+      score: item?.score ?? null,
+      repValue: item?.repValue ?? null,
+      sampleCount: item?.sampleCount ?? 0
+    }
+  })
+  const points = slots.map((item, index) => {
+    const hour = new Date(item.measuredAt).getHours()
+    const point = toChartPoint(item, index, slots.length)
 
-    if (currentPoint.hasData && nextPoint.hasData) {
-      const line = `M${currentPoint.x.toFixed(1)} ${currentPoint.y.toFixed(1)} L${nextPoint.x.toFixed(1)} ${nextPoint.y.toFixed(1)}`
-      dataSegments.push(line)
-      fills.push(`${line} L${nextPoint.x.toFixed(1)} 122 L${currentPoint.x.toFixed(1)} 122 Z`)
-      continue
+    return {
+      ...point,
+      label: `${String(hour).padStart(2, '0')}:00`,
+      labelVisible: false
+    }
+  })
+  const dataPoints = points.filter((point) => point.hasData)
+  const labelStep = Math.max(1, Math.ceil((dataPoints.length - 2) / 4))
+  const labels = dataPoints.filter(
+    (point, index) =>
+      dataPoints.length <= 6 ||
+      index === 0 ||
+      index === dataPoints.length - 1 ||
+      index % labelStep === 0
+  )
+
+  if (dataPoints.length === 1) {
+    return {
+      line: '',
+      fill: '',
+      dataPoints,
+      labels,
+      hoverSlots: points
     }
   }
+
+  const line = `M${dataPoints.map((point) => `${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' L')}`
+  const firstPoint = dataPoints[0]
+  const lastPoint = dataPoints[dataPoints.length - 1]
 
   return {
-    dataSegments,
-    fills,
-    dataPoints: pointsWithData.length === 1 ? pointsWithData : []
+    line,
+    fill: `${line} L${lastPoint.x.toFixed(1)} 122 L${firstPoint.x.toFixed(1)} 122 Z`,
+    dataPoints: [],
+    labels,
+    hoverSlots: points
   }
 }
 
@@ -108,28 +136,14 @@ function createHourlyTrend(trend) {
     buckets.set(hour, bucket)
   }
 
-  const reportDate = trend[0]?.measuredAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
-
-  return Array.from({ length: 10 }, (_, index) => {
-    const hour = index + 9
-    const bucket = buckets.get(hour)
-
-    if (!bucket) {
-      return {
-        measuredAt: `${reportDate}T${String(hour).padStart(2, '0')}:00:00`,
-        score: null,
-        repValue: null,
-        sampleCount: 0
-      }
-    }
-
-    return {
+  return [...buckets.entries()]
+    .sort(([hourA], [hourB]) => hourA - hourB)
+    .map(([, bucket]) => ({
       measuredAt: bucket.measuredAt,
       score: Number((bucket.scoreTotal / bucket.sampleCount).toFixed(1)),
       repValue: Number((bucket.repValueTotal / bucket.sampleCount).toFixed(1)),
       sampleCount: bucket.sampleCount
-    }
-  })
+    }))
 }
 
 function getMonthCells(year, month) {
@@ -170,7 +184,6 @@ function getMonthCells(year, month) {
 function ReportScreen({
   report,
   monthlyReport,
-  score,
   onBack,
   onLoadDailyReport,
   onLoadMonthlyReport,
@@ -179,6 +192,7 @@ function ReportScreen({
 }) {
   const [view, setView] = useState('daily')
   const [visibleMonth, setVisibleMonth] = useState(() => new Date())
+  const [hoveredChartSlot, setHoveredChartSlot] = useState(null)
   const visibleYear = visibleMonth.getFullYear()
   const visibleMonthNumber = visibleMonth.getMonth() + 1
 
@@ -191,7 +205,7 @@ function ReportScreen({
   }, [onLoadMonthlyReport, view, visibleMonthNumber, visibleYear])
 
   const hasDailySamples = Number(report?.cvStats?.sampleCount ?? 0) > 0
-  const dailyScore = hasDailySamples ? report?.cvStats?.averageScore : score
+  const dailyScore = hasDailySamples ? report?.cvStats?.averageScore : null
   const hasDailyScore = typeof dailyScore === 'number'
   const scoreLabel = typeof dailyScore === 'number' ? `${Math.round(dailyScore)}점` : '--'
   const yesterdayScore = report?.averageScoreComparison?.yesterday?.averageScore
@@ -275,12 +289,8 @@ function ReportScreen({
                       <stop offset="100%" stopColor="#18bd84" stopOpacity="0" />
                     </linearGradient>
                   </defs>
-                  {trendPath.fills.map((path, index) => (
-                    <path key={`fill-${index}`} className="chart-fill" d={path} />
-                  ))}
-                  {trendPath.dataSegments.map((path, index) => (
-                    <path key={`line-${index}`} className="chart-line" d={path} />
-                  ))}
+                  {trendPath.fill ? <path className="chart-fill" d={trendPath.fill} /> : null}
+                  {trendPath.line ? <path className="chart-line" d={trendPath.line} /> : null}
                   {trendPath.dataPoints.map((point, index) => (
                     <circle
                       key={`point-${index}`}
@@ -290,13 +300,53 @@ function ReportScreen({
                       r="4"
                     />
                   ))}
+                  {trendPath.hoverSlots.map((slot, index) => {
+                    const previousSlot = trendPath.hoverSlots[index - 1]
+                    const nextSlot = trendPath.hoverSlots[index + 1]
+                    const leftEdge = previousSlot ? (previousSlot.x + slot.x) / 2 : 0
+                    const rightEdge = nextSlot ? (nextSlot.x + slot.x) / 2 : 300
+
+                    return (
+                      <rect
+                        key={`hover-${slot.label}`}
+                        className="chart-hover-zone"
+                        x={leftEdge}
+                        y="0"
+                        width={rightEdge - leftEdge}
+                        height="130"
+                        onMouseEnter={() => setHoveredChartSlot(slot)}
+                        onMouseLeave={() => setHoveredChartSlot(null)}
+                      />
+                    )
+                  })}
+                  {trendPath.labels.map((point) => (
+                    <text
+                      key={`label-${point.label}`}
+                      className="chart-x-label"
+                      x={point.x}
+                      y="129"
+                      textAnchor="middle"
+                    >
+                      {point.label}
+                    </text>
+                  ))}
                 </svg>
-                <div className="chart-labels">
-                  <span>09:00</span>
-                  <span>12:00</span>
-                  <span>15:00</span>
-                  <span>18:00</span>
-                </div>
+                {hoveredChartSlot ? (
+                  <div
+                    className={`chart-tooltip ${hoveredChartSlot.hasData ? '' : 'empty'}`}
+                    style={{
+                      left: `${Math.min(92, Math.max(8, (hoveredChartSlot.x / 300) * 100))}%`,
+                      top: `${Math.max(10, (hoveredChartSlot.y / 130) * 100)}%`
+                    }}
+                  >
+                    <span>{hoveredChartSlot.label}</span>
+                    <strong>
+                      {hoveredChartSlot.hasData
+                        ? `${Math.round(hoveredChartSlot.score)}점`
+                        : '측정값 없음'}
+                    </strong>
+                  </div>
+                ) : null}
               </div>
             </div>
           </section>
