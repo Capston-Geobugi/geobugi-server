@@ -13,14 +13,38 @@ const mockDailyReport = {
   stretchingSkippedCount: 0
 }
 
+const mockMonthlyReport = {
+  year: new Date().getFullYear(),
+  month: new Date().getMonth() + 1,
+  startDate: new Date().toISOString().slice(0, 8) + '01',
+  endDate: new Date().toISOString().slice(0, 10),
+  reportDates: [],
+  days: []
+}
+
 export const geobugiApi = {
-  async getDailyReport() {
+  async getDailyReport(input = {}) {
     if (window.api?.report?.getDaily) {
-      const date = new Date().toISOString().slice(0, 10)
+      const date = input.date ?? new Date().toISOString().slice(0, 10)
       return window.api.report.getDaily({ date })
     }
 
-    return mockDailyReport
+    return {
+      ...mockDailyReport,
+      date: input.date ?? mockDailyReport.date
+    }
+  },
+
+  async getMonthlyReport(input = {}) {
+    if (window.api?.report?.getMonthly) {
+      const today = new Date()
+      return window.api.report.getMonthly({
+        year: input.year ?? today.getFullYear(),
+        month: input.month ?? today.getMonth() + 1
+      })
+    }
+
+    return mockMonthlyReport
   },
 
   async getActiveCalibration() {
