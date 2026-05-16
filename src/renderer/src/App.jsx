@@ -13,6 +13,7 @@ function App() {
   const [screen, setScreen] = useState(initialScreen)
   const [calibration, setCalibration] = useState(null)
   const [report, setReport] = useState(null)
+  const [monthlyReport, setMonthlyReport] = useState(null)
   const [cvStatus, setCvStatus] = useState('측정 대기 중')
   const [cvError, setCvError] = useState('')
   const [cvFrame, setCvFrame] = useState('')
@@ -28,24 +29,32 @@ function App() {
       return Math.round(report.stateRatio.good * 100)
     }
 
-    return 0
+    return null
   }, [cvRealtime, report])
 
-  const refreshReport = useCallback(async () => {
-    const daily = await geobugiApi.getDailyReport()
+  const refreshReport = useCallback(async (input = {}) => {
+    const daily = await geobugiApi.getDailyReport(input)
     setReport(daily)
+    return daily
+  }, [])
+
+  const refreshMonthlyReport = useCallback(async (input = {}) => {
+    const monthly = await geobugiApi.getMonthlyReport(input)
+    setMonthlyReport(monthly)
+    return monthly
   }, [])
 
   const bootstrapServerState = useCallback(async () => {
     const [activeCalibration] = await Promise.all([
       geobugiApi.getActiveCalibration(),
-      refreshReport()
+      refreshReport(),
+      refreshMonthlyReport()
     ])
 
     if (activeCalibration) {
       setCalibration(activeCalibration)
     }
-  }, [refreshReport])
+  }, [refreshMonthlyReport, refreshReport])
 
   const handleCalibrationDone = useCallback(
     async (payload) => {
@@ -77,6 +86,16 @@ function App() {
       void bootstrapServerState()
     })
   }, [bootstrapServerState])
+
+  useEffect(() => {
+    if (screen !== 'report') {
+      return
+    }
+
+    queueMicrotask(() => {
+      void refreshReport()
+    })
+  }, [refreshReport, screen])
 
   useEffect(() => {
     document.body.dataset.screen = screen
@@ -212,8 +231,12 @@ function App() {
     return (
       <ReportScreen
         report={report}
+        monthlyReport={monthlyReport}
         score={postureScore}
         onBack={() => setScreen('home')}
+        onLoadDailyReport={refreshReport}
+        onLoadMonthlyReport={refreshMonthlyReport}
+        onOpenReport={() => setScreen('report')}
         onOpenStretching={() => setScreen('stretching')}
       />
     )

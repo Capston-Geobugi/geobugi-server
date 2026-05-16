@@ -193,7 +193,12 @@ export function getMonthlyReport(input = {}) {
   const rows = database
     .prepare(
       `
-        SELECT date(measured_at) AS date
+        SELECT
+          date(measured_at) AS date,
+          COUNT(*) AS sample_count,
+          AVG(rep_value) AS average_rep_value,
+          MIN(rep_value) AS min_rep_value,
+          MAX(rep_value) AS max_rep_value
         FROM cv_posture_samples
         WHERE date(measured_at) BETWEEN date(?) AND date(?)
         GROUP BY date(measured_at)
@@ -207,7 +212,15 @@ export function getMonthlyReport(input = {}) {
     month,
     startDate,
     endDate,
-    reportDates: rows.map((row) => row.date)
+    reportDates: rows.map((row) => row.date),
+    days: rows.map((row) => ({
+      date: row.date,
+      sampleCount: row.sample_count,
+      averageRepValue: row.average_rep_value,
+      minRepValue: row.min_rep_value,
+      maxRepValue: row.max_rep_value,
+      averageScore: toPostureScore(row.average_rep_value)
+    }))
   }
 }
 
