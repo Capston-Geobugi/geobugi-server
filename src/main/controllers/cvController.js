@@ -12,8 +12,26 @@ let lastRealtimePayload = null
 let calibrationBaseline = null
 let isQuittingAfterCvShutdown = false
 
+const MIN_USER_SENSITIVITY = 1
+const MAX_USER_SENSITIVITY = 20
+
 function getPythonCommand() {
   return process.platform === 'win32' ? 'python' : 'python3'
+}
+
+function toCvSensitivity(userSensitivity) {
+  const numericValue = Number(userSensitivity)
+
+  if (!Number.isFinite(numericValue)) {
+    throw new Error('Sensitivity must be a number.')
+  }
+
+  const clampedValue = Math.min(
+    MAX_USER_SENSITIVITY,
+    Math.max(MIN_USER_SENSITIVITY, numericValue)
+  )
+
+  return MIN_USER_SENSITIVITY + MAX_USER_SENSITIVITY - clampedValue
 }
 
 function broadcast(channel, payload) {
@@ -178,8 +196,12 @@ export function startCvPreview() {
 }
 
 export function setCvSensitivity(value) {
-  sendCommand({ type: 'SET_SENSITIVITY', value })
-  return { ok: true }
+  const userSensitivity = Number(value)
+  const cvSensitivity = toCvSensitivity(userSensitivity)
+
+  sendCommand({ type: 'SET_SENSITIVITY', value: cvSensitivity })
+
+  return { ok: true, userSensitivity, cvSensitivity }
 }
 
 export function attachCvSession(sessionId) {
