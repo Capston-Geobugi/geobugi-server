@@ -28,10 +28,23 @@ import {
   getPendingMissions,
   skipMission
 } from '../controllers/stretchingController'
+import {
+  activateSensitivityMode,
+  createSensitivityMode,
+  deleteSensitivityMode,
+  getActiveSensitivityMode,
+  getSensitivityModes,
+  updateSensitivityMode
+} from '../controllers/sensitivityModeController'
+import {
+  getSettings,
+  updateStretchingSettings,
+  updateWidgetSettings
+} from '../controllers/settingsController'
 
 let handlersRegistered = false
 
-export function registerIpcHandlers() {
+export function registerIpcHandlers({ onWidgetSettingsChanged } = {}) {
   if (handlersRegistered) {
     return
   }
@@ -65,4 +78,20 @@ export function registerIpcHandlers() {
   ipcMain.handle('cv:getStatus', () => getCvStatus())
   ipcMain.handle('cv:attachSession', (_event, sessionId) => attachCvSession(sessionId))
   ipcMain.handle('cv:setSensitivity', (_event, value) => setCvSensitivity(value))
+
+  ipcMain.handle('sensitivityMode:list', () => getSensitivityModes())
+  ipcMain.handle('sensitivityMode:getActive', () => getActiveSensitivityMode())
+  ipcMain.handle('sensitivityMode:create', (_event, input) => createSensitivityMode(input))
+  ipcMain.handle('sensitivityMode:update', (_event, input) => updateSensitivityMode(input))
+  ipcMain.handle('sensitivityMode:delete', (_event, input) => deleteSensitivityMode(input))
+  ipcMain.handle('sensitivityMode:activate', (_event, input) => activateSensitivityMode(input))
+
+  ipcMain.handle('settings:get', () => getSettings())
+  ipcMain.handle('settings:updateWidget', (_event, input) => {
+    const settings = updateWidgetSettings(input)
+    onWidgetSettingsChanged?.(settings.widget)
+
+    return settings
+  })
+  ipcMain.handle('settings:updateStretching', (_event, input) => updateStretchingSettings(input))
 }

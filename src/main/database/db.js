@@ -86,6 +86,22 @@ function runMigrations(database) {
       FOREIGN KEY (session_id) REFERENCES posture_sessions(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sensitivity_modes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      user_sensitivity INTEGER NOT NULL CHECK (user_sensitivity BETWEEN 1 AND 20),
+      is_active INTEGER NOT NULL DEFAULT 0,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_posture_sessions_started_at
       ON posture_sessions(started_at);
     CREATE INDEX IF NOT EXISTS idx_posture_events_session_id
@@ -98,7 +114,62 @@ function runMigrations(database) {
       ON cv_posture_samples(measured_at);
     CREATE INDEX IF NOT EXISTS idx_stretching_missions_started_at
       ON stretching_missions(started_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sensitivity_modes_active
+      ON sensitivity_modes(is_active)
+      WHERE is_active = 1;
   `)
+
+  const sensitivityModeCount = database
+    .prepare('SELECT COUNT(*) AS count FROM sensitivity_modes')
+    .get().count
+
+  if (sensitivityModeCount === 0) {
+    database
+      .prepare(
+        `
+          INSERT INTO sensitivity_modes (
+            name,
+            user_sensitivity,
+            is_active,
+            is_default
+          ) VALUES ('기본 모드', 10, 1, 1)
+        `
+      )
+      .run()
+  }
+
+  const insertSetting = database.prepare(
+    `
+      INSERT OR IGNORE INTO app_settings (key, value)
+      VALUES (?, ?)
+    `
+  )
+
+  insertSetting.run('widget.opacity', '1')
+  insertSetting.run('widget.scale', '1')
+  insertSetting.run('stretching.interval_minutes', '60')
+
+  const activeSensitivityMode = database
+    .prepare('SELECT id FROM sensitivity_modes WHERE is_active = 1 LIMIT 1')
+    .get()
+
+  if (!activeSensitivityMode) {
+    database
+      .prepare(
+        `
+          UPDATE sensitivity_modes
+          SET is_active = 1,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = (
+            SELECT id
+            FROM sensitivity_modes
+            ORDER BY is_default DESC, created_at ASC, id ASC
+            LIMIT 1
+          )
+        `
+      )
+      .run()
+  }
 
   const calibrationColumns = database
     .prepare("SELECT name FROM pragma_table_info('calibrations')")
