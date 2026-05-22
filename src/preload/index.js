@@ -43,8 +43,11 @@ const api = {
   },
   cv: {
     start: () => electronAPI.ipcRenderer.invoke('cv:start'),
+    prepare: () => electronAPI.ipcRenderer.invoke('cv:prepare'),
     startPreview: () => electronAPI.ipcRenderer.invoke('cv:startPreview'),
     startCalibration: () => electronAPI.ipcRenderer.invoke('cv:startCalibration'),
+    pauseMonitoring: () => electronAPI.ipcRenderer.invoke('cv:pauseMonitoring'),
+    resumeMonitoring: () => electronAPI.ipcRenderer.invoke('cv:resumeMonitoring'),
     stop: () => electronAPI.ipcRenderer.invoke('cv:stop'),
     getStatus: () => electronAPI.ipcRenderer.invoke('cv:getStatus'),
     attachSession: (sessionId) => electronAPI.ipcRenderer.invoke('cv:attachSession', sessionId),
