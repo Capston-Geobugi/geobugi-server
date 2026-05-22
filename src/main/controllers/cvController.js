@@ -10,6 +10,7 @@ let stdoutBuffer = ''
 let activeSessionId = null
 let lastRealtimePayload = null
 let calibrationBaseline = null
+let runtimeState = null
 let isQuittingAfterCvShutdown = false
 
 const MIN_USER_SENSITIVITY = 1
@@ -110,6 +111,10 @@ function handleCvMessage(message) {
     lastRealtimePayload = message.payload
   }
 
+  if (message.type === 'RUNTIME_STATE') {
+    runtimeState = message.payload ?? null
+  }
+
   if (message.type === 'CALIB_DONE') {
     calibrationBaseline = message.payload?.baseline ?? null
   }
@@ -180,6 +185,59 @@ function sendCommand(command) {
   processRef.stdin.write(`${JSON.stringify(command)}\n`)
 }
 
+function getSavedCalibrationBaseline() {
+  const row = getDB()
+    .prepare(
+      `
+        SELECT neck_forward_offset
+        FROM calibrations
+        WHERE is_active = 1
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      `
+    )
+    .get()
+  const baseline = Number(row?.neck_forward_offset)
+
+  return Number.isFinite(baseline) && baseline > 0 ? baseline : null
+}
+
+function getActiveUserSensitivity() {
+  const row = getDB()
+    .prepare(
+      `
+        SELECT user_sensitivity
+        FROM sensitivity_modes
+        WHERE is_active = 1
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+      `
+    )
+    .get()
+  const userSensitivity = Number(row?.user_sensitivity)
+
+  return Number.isFinite(userSensitivity) ? userSensitivity : null
+}
+
+function restoreRuntimeSettings() {
+  const baseline = calibrationBaseline ?? getSavedCalibrationBaseline()
+
+  if (baseline) {
+    calibrationBaseline = baseline
+    sendCommand({ type: 'SET_BASELINE', value: baseline })
+  }
+
+  if (runtimeState) {
+    sendCommand({ type: 'SET_RUNTIME_STATE', value: runtimeState })
+  }
+
+  const userSensitivity = getActiveUserSensitivity()
+
+  if (userSensitivity) {
+    setCvSensitivity(userSensitivity)
+  }
+}
+
 export function startCvProcess() {
   ensureCvProcess()
   return getCvStatus()
@@ -192,6 +250,7 @@ export function startCvCalibration() {
 
 export function startCvPreview() {
   ensureCvProcess()
+  restoreRuntimeSettings()
   return getCvStatus()
 }
 
