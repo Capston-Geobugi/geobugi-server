@@ -4,7 +4,7 @@ import { is } from '@electron-toolkit/utils'
 
 import { initDB } from './database/db'
 import { registerIpcHandlers } from './ipc/ipcRouter'
-import { registerCvShutdown, stopCvProcess } from './controllers/cvController'
+import { pauseCvMonitoring, registerCvShutdown } from './controllers/cvController'
 
 let mainWindow = null
 let calibrationWindow = null
@@ -109,7 +109,7 @@ function createCalibrationWindow() {
   calibrationWindow.on('closed', () => {
     calibrationWindow = null
     if (!calibrationCompleted) {
-      void stopCvProcess()
+      void pauseCvMonitoring()
     }
     mainWindow?.focus()
   })

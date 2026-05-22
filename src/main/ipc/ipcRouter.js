@@ -16,6 +16,9 @@ import { getDailyReport, getMonthlyReport, getWeeklyReport } from '../controller
 import {
   attachCvSession,
   getCvStatus,
+  pauseCvMonitoring,
+  prepareCvProcess,
+  resumeCvMonitoring,
   setCvSensitivity,
   startCvCalibration,
   startCvPreview,
@@ -72,8 +75,11 @@ export function registerIpcHandlers({ onWidgetSettingsChanged } = {}) {
   ipcMain.handle('report:getWeekly', (_event, input) => getWeeklyReport(input))
 
   ipcMain.handle('cv:start', () => startCvProcess())
+  ipcMain.handle('cv:prepare', () => prepareCvProcess())
   ipcMain.handle('cv:startPreview', () => startCvPreview())
   ipcMain.handle('cv:startCalibration', () => startCvCalibration())
+  ipcMain.handle('cv:pauseMonitoring', () => pauseCvMonitoring())
+  ipcMain.handle('cv:resumeMonitoring', () => resumeCvMonitoring())
   ipcMain.handle('cv:stop', () => stopCvProcess())
   ipcMain.handle('cv:getStatus', () => getCvStatus())
   ipcMain.handle('cv:attachSession', (_event, sessionId) => attachCvSession(sessionId))

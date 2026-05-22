@@ -111,9 +111,33 @@ export const geobugiApi = {
     return { ok: true }
   },
 
+  async prepareCv() {
+    if (window.api?.cv?.prepare) {
+      return window.api.cv.prepare()
+    }
+
+    return { ok: true, ready: true }
+  },
+
   async startCvPreview() {
     if (window.api?.cv?.startPreview) {
       return window.api.cv.startPreview()
+    }
+
+    return { ok: true }
+  },
+
+  async pauseCvMonitoring() {
+    if (window.api?.cv?.pauseMonitoring) {
+      return window.api.cv.pauseMonitoring()
+    }
+
+    return { ok: true }
+  },
+
+  async resumeCvMonitoring() {
+    if (window.api?.cv?.resumeMonitoring) {
+      return window.api.cv.resumeMonitoring()
     }
 
     return { ok: true }

@@ -11,6 +11,8 @@ let activeSessionId = null
 let lastRealtimePayload = null
 let calibrationBaseline = null
 let runtimeState = null
+let cvReady = false
+let cvReadyWaiters = []
 let isQuittingAfterCvShutdown = false
 
 const MIN_USER_SENSITIVITY = 1
@@ -107,6 +109,12 @@ function persistCvReport(report) {
 }
 
 function handleCvMessage(message) {
+  if (message.type === 'STATUS' && message.payload === 'CV_READY') {
+    cvReady = true
+    cvReadyWaiters.forEach((resolve) => resolve(getCvStatus()))
+    cvReadyWaiters = []
+  }
+
   if (message.type === 'REALTIME_UPDATE') {
     lastRealtimePayload = message.payload
   }
@@ -169,6 +177,9 @@ function ensureCvProcess() {
   cvProcess.on('close', (code) => {
     cvProcess = null
     stdoutBuffer = ''
+    cvReady = false
+    cvReadyWaiters.forEach((resolve) => resolve(getCvStatus()))
+    cvReadyWaiters = []
     sendCvEvent('STATUS', { running: false, code })
   })
 
@@ -183,6 +194,26 @@ function sendCommand(command) {
   }
 
   processRef.stdin.write(`${JSON.stringify(command)}\n`)
+}
+
+function waitForCvReady(timeoutMs = 20000) {
+  if (cvReady) {
+    return Promise.resolve(getCvStatus())
+  }
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      cvReadyWaiters = cvReadyWaiters.filter((waiter) => waiter !== finish)
+      resolve(getCvStatus())
+    }, timeoutMs)
+
+    function finish(status) {
+      clearTimeout(timeout)
+      resolve(status)
+    }
+
+    cvReadyWaiters.push(finish)
+  })
 }
 
 function getSavedCalibrationBaseline() {
@@ -243,6 +274,11 @@ export function startCvProcess() {
   return getCvStatus()
 }
 
+export async function prepareCvProcess() {
+  ensureCvProcess()
+  return waitForCvReady()
+}
+
 export function startCvCalibration() {
   sendCommand({ type: 'START_CALIB' })
   return { ok: true }
@@ -251,6 +287,23 @@ export function startCvCalibration() {
 export function startCvPreview() {
   ensureCvProcess()
   restoreRuntimeSettings()
+  sendCommand({ type: 'START_PREVIEW' })
+  return getCvStatus()
+}
+
+export function pauseCvMonitoring() {
+  if (!cvProcess || cvProcess.killed) {
+    return getCvStatus()
+  }
+
+  sendCommand({ type: 'PAUSE_MONITORING' })
+  return getCvStatus()
+}
+
+export function resumeCvMonitoring() {
+  ensureCvProcess()
+  restoreRuntimeSettings()
+  sendCommand({ type: 'RESUME_MONITORING' })
   return getCvStatus()
 }
 
@@ -273,7 +326,8 @@ export function getCvStatus() {
     running: Boolean(cvProcess),
     activeSessionId,
     calibrationBaseline,
-    lastRealtimePayload
+    lastRealtimePayload,
+    ready: cvReady
   }
 }
 

@@ -238,6 +238,53 @@ button:disabled {
   animation: pulse 900ms ease-in-out infinite;
 }
 
+.loading-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 0;
+  background: #18bd84;
+}
+
+.geobugi-splash-logo {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  color: #ffffff;
+  transform: translateY(-8px);
+}
+
+.geobugi-logo-text {
+  margin: 0;
+  font-family: 'Arial Rounded MT Bold', 'Nunito', 'Avenir Next Rounded', system-ui, sans-serif;
+  font-size: 42px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.geobugi-loading-bar {
+  position: relative;
+  display: block;
+  width: 118px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.geobugi-loading-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border-radius: inherit;
+  background: #ffffff;
+  transform: scaleX(var(--loading-progress, 0));
+  transform-origin: left center;
+  transition: transform 420ms ease;
+}
+
 .home-screen {
   display: block;
   padding: 24px 20px 0;

@@ -4,6 +4,7 @@ import { geobugiApi } from './lib/api'
 import CalibrationScreen from './screens/CalibrationScreen'
 import HomeScreen from './screens/HomeScreen'
 import IdleScreen from './screens/IdleScreen'
+import LoadingScreen from './screens/LoadingScreen'
 import ReportScreen from './screens/ReportScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import StretchingScreen from './screens/StretchingScreen'
@@ -11,7 +12,11 @@ import StretchingScreen from './screens/StretchingScreen'
 function App() {
   const initialScreen = new URLSearchParams(window.location.search).get('screen') || 'home'
   const isCalibrationWindow = initialScreen === 'calibration'
+  const shouldPrepareCvOnBoot = initialScreen === 'home'
   const [screen, setScreen] = useState(initialScreen)
+  const [bootReady, setBootReady] = useState(!shouldPrepareCvOnBoot)
+  const [bootMessage, setBootMessage] = useState('앱 설정을 불러오고 있어요')
+  const [bootProgress, setBootProgress] = useState(shouldPrepareCvOnBoot ? 8 : 100)
   const [calibration, setCalibration] = useState(null)
   const [report, setReport] = useState(null)
   const [monthlyReport, setMonthlyReport] = useState(null)
@@ -48,19 +53,31 @@ function App() {
   }, [])
 
   const bootstrapServerState = useCallback(async () => {
+    setBootMessage('앱 설정을 불러오고 있어요')
+    setBootProgress(12)
     const [activeCalibration, appSettings] = await Promise.all([
       geobugiApi.getActiveCalibration(),
       geobugiApi.getSettings(),
       refreshReport(),
       refreshMonthlyReport()
     ])
+    setBootProgress(58)
 
     if (activeCalibration) {
       setCalibration(activeCalibration)
     }
 
     setSettings(appSettings)
-  }, [refreshMonthlyReport, refreshReport])
+
+    if (shouldPrepareCvOnBoot) {
+      setBootMessage('자세 측정 엔진을 준비하고 있어요')
+      setBootProgress(68)
+      await geobugiApi.prepareCv()
+      setBootProgress(100)
+    }
+
+    setBootReady(true)
+  }, [refreshMonthlyReport, refreshReport, shouldPrepareCvOnBoot])
 
   const handleCalibrationDone = useCallback(
     async (payload) => {
@@ -186,12 +203,12 @@ function App() {
 
   async function handlePauseMonitoring() {
     if (!paused) {
-      await geobugiApi.stopCv()
+      await geobugiApi.pauseCvMonitoring()
       setPaused(true)
       return
     }
 
-    await geobugiApi.startCvPreview()
+    await geobugiApi.resumeCvMonitoring()
     setPaused(false)
   }
 
@@ -202,6 +219,10 @@ function App() {
     }
 
     setScreen('home')
+  }
+
+  if (!bootReady) {
+    return <LoadingScreen message={bootMessage} progress={bootProgress} />
   }
 
   if (screen === 'idle') {
