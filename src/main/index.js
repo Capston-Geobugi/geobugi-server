@@ -5,15 +5,14 @@ import { is } from '@electron-toolkit/utils'
 import { initDB } from './database/db'
 import { registerIpcHandlers } from './ipc/ipcRouter'
 import { registerCvShutdown, stopCvProcess } from './controllers/cvController'
-import { getWidgetSettings } from './controllers/settingsController'
 
 let mainWindow = null
 let calibrationWindow = null
 let idleWindow = null
 let calibrationCompleted = false
 
-const WIDGET_BASE_WIDTH = 150
-const WIDGET_BASE_HEIGHT = 250
+const WIDGET_WINDOW_WIDTH = 220
+const WIDGET_WINDOW_HEIGHT = 310
 const WIDGET_MARGIN = 22
 
 function getRendererUrl(route = '') {
@@ -35,20 +34,17 @@ function loadRenderer(window, route = '') {
   window.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-function applyWidgetSettingsToIdleWindow(widgetSettings = getWidgetSettings()) {
+function applyWidgetSettingsToIdleWindow() {
   if (!idleWindow || idleWindow.isDestroyed()) {
     return
   }
 
-  const scale = widgetSettings.scale
-  const width = Math.round(WIDGET_BASE_WIDTH * scale)
-  const height = Math.round(WIDGET_BASE_HEIGHT * scale)
   const { workArea } = screen.getPrimaryDisplay()
 
-  idleWindow.setSize(width, height)
+  idleWindow.setSize(WIDGET_WINDOW_WIDTH, WIDGET_WINDOW_HEIGHT)
   idleWindow.setPosition(
-    workArea.x + workArea.width - width - WIDGET_MARGIN,
-    workArea.y + workArea.height - height - WIDGET_MARGIN
+    workArea.x + workArea.width - WIDGET_WINDOW_WIDTH - WIDGET_MARGIN,
+    workArea.y + workArea.height - WIDGET_WINDOW_HEIGHT - WIDGET_MARGIN
   )
 }
 
@@ -127,17 +123,14 @@ function createIdleWindow() {
     return
   }
 
-  const widgetSettings = getWidgetSettings()
   const { workArea } = screen.getPrimaryDisplay()
-  const width = Math.round(WIDGET_BASE_WIDTH * widgetSettings.scale)
-  const height = Math.round(WIDGET_BASE_HEIGHT * widgetSettings.scale)
 
   idleWindow = new BrowserWindow({
-    width,
-    height,
+    width: WIDGET_WINDOW_WIDTH,
+    height: WIDGET_WINDOW_HEIGHT,
     useContentSize: true,
-    x: workArea.x + workArea.width - width - WIDGET_MARGIN,
-    y: workArea.y + workArea.height - height - WIDGET_MARGIN,
+    x: workArea.x + workArea.width - WIDGET_WINDOW_WIDTH - WIDGET_MARGIN,
+    y: workArea.y + workArea.height - WIDGET_WINDOW_HEIGHT - WIDGET_MARGIN,
     resizable: false,
     frame: false,
     transparent: true,

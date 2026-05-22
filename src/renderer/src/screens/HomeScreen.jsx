@@ -4,7 +4,7 @@ import { Activity } from 'lucide-react'
 import turtleImage from '../assets/geobugi-turtle.png'
 import BottomNav from '../components/BottomNav'
 
-function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching }) {
+function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, onSettings }) {
   const scoreLabel = typeof score === 'number' ? `${score}점` : '--'
   const hasScore = typeof score === 'number'
 
@@ -43,7 +43,7 @@ function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching }
         </button>
       </div>
 
-      <BottomNav onReport={onReport} onStretching={onStretching} />
+      <BottomNav onReport={onReport} onStretching={onStretching} onSettings={onSettings} />
     </main>
   )
 }

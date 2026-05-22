@@ -59,6 +59,24 @@ const api = {
       ipcRenderer.on('cv:error', listener)
       return () => ipcRenderer.removeListener('cv:error', listener)
     }
+  },
+  sensitivityMode: {
+    list: () => electronAPI.ipcRenderer.invoke('sensitivityMode:list'),
+    getActive: () => electronAPI.ipcRenderer.invoke('sensitivityMode:getActive'),
+    create: (input) => electronAPI.ipcRenderer.invoke('sensitivityMode:create', input),
+    update: (input) => electronAPI.ipcRenderer.invoke('sensitivityMode:update', input),
+    delete: (input) => electronAPI.ipcRenderer.invoke('sensitivityMode:delete', input),
+    activate: (input) => electronAPI.ipcRenderer.invoke('sensitivityMode:activate', input)
+  },
+  settings: {
+    get: () => electronAPI.ipcRenderer.invoke('settings:get'),
+    updateWidget: (input) => electronAPI.ipcRenderer.invoke('settings:updateWidget', input),
+    updateStretching: (input) => electronAPI.ipcRenderer.invoke('settings:updateStretching', input),
+    onChanged: (callback) => {
+      const listener = (_event, settings) => callback(settings)
+      ipcRenderer.on('settings:changed', listener)
+      return () => ipcRenderer.removeListener('settings:changed', listener)
+    }
   }
 }
 

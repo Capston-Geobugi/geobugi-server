@@ -187,14 +187,20 @@ function ReportScreen({
   onBack,
   onLoadDailyReport,
   onLoadMonthlyReport,
+  initialView = 'daily',
   onOpenReport,
-  onOpenStretching
+  onOpenStretching,
+  onOpenSettings
 }) {
-  const [view, setView] = useState('daily')
+  const [view, setView] = useState(initialView)
   const [visibleMonth, setVisibleMonth] = useState(() => new Date())
   const [hoveredChartSlot, setHoveredChartSlot] = useState(null)
   const visibleYear = visibleMonth.getFullYear()
   const visibleMonthNumber = visibleMonth.getMonth() + 1
+
+  useEffect(() => {
+    setView(initialView)
+  }, [initialView])
 
   useEffect(() => {
     if (view !== 'monthly') {
@@ -414,7 +420,12 @@ function ReportScreen({
         </>
       )}
 
-      <BottomNav active="report" onReport={onOpenReport} onStretching={onOpenStretching} />
+      <BottomNav
+        active="report"
+        onReport={onOpenReport}
+        onStretching={onOpenStretching}
+        onSettings={onOpenSettings}
+      />
     </main>
   )
 }

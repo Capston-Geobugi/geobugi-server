@@ -5,6 +5,7 @@ import CalibrationScreen from './screens/CalibrationScreen'
 import HomeScreen from './screens/HomeScreen'
 import IdleScreen from './screens/IdleScreen'
 import ReportScreen from './screens/ReportScreen'
+import SettingsScreen from './screens/SettingsScreen'
 import StretchingScreen from './screens/StretchingScreen'
 
 function App() {
@@ -14,11 +15,13 @@ function App() {
   const [calibration, setCalibration] = useState(null)
   const [report, setReport] = useState(null)
   const [monthlyReport, setMonthlyReport] = useState(null)
+  const [settings, setSettings] = useState(null)
   const [cvStatus, setCvStatus] = useState('측정 대기 중')
   const [cvError, setCvError] = useState('')
   const [cvFrame, setCvFrame] = useState('')
   const [cvRealtime, setCvRealtime] = useState(null)
   const [paused, setPaused] = useState(false)
+  const [reportInitialView, setReportInitialView] = useState('daily')
 
   const postureScore = useMemo(() => {
     if (typeof cvRealtime?.cumulative_score === 'number') {
@@ -45,8 +48,9 @@ function App() {
   }, [])
 
   const bootstrapServerState = useCallback(async () => {
-    const [activeCalibration] = await Promise.all([
+    const [activeCalibration, appSettings] = await Promise.all([
       geobugiApi.getActiveCalibration(),
+      geobugiApi.getSettings(),
       refreshReport(),
       refreshMonthlyReport()
     ])
@@ -54,6 +58,8 @@ function App() {
     if (activeCalibration) {
       setCalibration(activeCalibration)
     }
+
+    setSettings(appSettings)
   }, [refreshMonthlyReport, refreshReport])
 
   const handleCalibrationDone = useCallback(
@@ -164,6 +170,8 @@ function App() {
     })
   }, [])
 
+  useEffect(() => geobugiApi.onSettingsChanged(setSettings), [])
+
   async function handleCalibrationStart() {
     setCvError('')
     setCvStatus('측정 중')
@@ -201,6 +209,7 @@ function App() {
       <IdleScreen
         realtime={cvRealtime}
         paused={paused}
+        widgetSettings={settings?.widget}
         onPause={handlePauseMonitoring}
         onOpenHome={handleOpenHomeFromIdle}
       />
@@ -237,7 +246,9 @@ function App() {
         onLoadDailyReport={refreshReport}
         onLoadMonthlyReport={refreshMonthlyReport}
         onOpenReport={() => setScreen('report')}
+        initialView={reportInitialView}
         onOpenStretching={() => setScreen('stretching')}
+        onOpenSettings={() => setScreen('settings')}
       />
     )
   }
@@ -245,6 +256,19 @@ function App() {
   if (screen === 'stretching') {
     return (
       <StretchingScreen onBack={() => setScreen('home')} onComplete={handleStretchingComplete} />
+    )
+  }
+
+  if (screen === 'settings') {
+    return (
+      <SettingsScreen
+        onBack={() => setScreen('home')}
+        onOpenReport={() => {
+          setReportInitialView('daily')
+          setScreen('report')
+        }}
+        onOpenStretching={() => setScreen('stretching')}
+      />
     )
   }
 
@@ -260,8 +284,12 @@ function App() {
 
         setScreen('calibration')
       }}
-      onReport={() => setScreen('report')}
+      onReport={() => {
+        setReportInitialView('daily')
+        setScreen('report')
+      }}
       onStretching={() => setScreen('stretching')}
+      onSettings={() => setScreen('settings')}
     />
   )
 }
