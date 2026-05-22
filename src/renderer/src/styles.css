@@ -277,10 +277,12 @@ button:disabled {
   content: '';
   position: absolute;
   inset: 0;
-  width: 46px;
+  width: 100%;
   border-radius: inherit;
   background: #ffffff;
-  animation: splashLoading 1.15s ease-in-out infinite;
+  transform: scaleX(var(--loading-progress, 0));
+  transform-origin: left center;
+  transition: transform 420ms ease;
 }
 
 .home-screen {
@@ -1338,20 +1340,6 @@ button:disabled {
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes splashLoading {
-  0% {
-    transform: translateX(-54px);
-  }
-
-  50% {
-    transform: translateX(36px);
-  }
-
-  100% {
-    transform: translateX(126px);
   }
 }
 
