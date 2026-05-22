@@ -1,5 +1,20 @@
+function toLocalIsoDate(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function getLocalMonthStartDate(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+
+  return `${year}-${month}-01`
+}
+
 const mockDailyReport = {
-  date: new Date().toISOString().slice(0, 10),
+  date: toLocalIsoDate(),
   totalDurationSec: 0,
   stateRatio: {
     good: 0,
@@ -16,8 +31,8 @@ const mockDailyReport = {
 const mockMonthlyReport = {
   year: new Date().getFullYear(),
   month: new Date().getMonth() + 1,
-  startDate: new Date().toISOString().slice(0, 8) + '01',
-  endDate: new Date().toISOString().slice(0, 10),
+  startDate: getLocalMonthStartDate(),
+  endDate: toLocalIsoDate(),
   reportDates: [],
   days: []
 }
@@ -65,13 +80,12 @@ const mockSettings = {
 export const geobugiApi = {
   async getDailyReport(input = {}) {
     if (window.api?.report?.getDaily) {
-      const date = input.date ?? new Date().toISOString().slice(0, 10)
-      return window.api.report.getDaily({ date })
+      return window.api.report.getDaily(input.date ? { date: input.date } : {})
     }
 
     return {
       ...mockDailyReport,
-      date: input.date ?? mockDailyReport.date
+      date: input.date ?? toLocalIsoDate()
     }
   },
 

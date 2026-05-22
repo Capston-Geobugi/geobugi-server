@@ -20,6 +20,21 @@ function formatKoreanDate(dateText) {
   }).format(date)
 }
 
+function toLocalIsoDate(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function addDaysToIsoDate(dateText, offset) {
+  const baseDate = dateText ? new Date(`${dateText}T00:00:00`) : new Date()
+  baseDate.setDate(baseDate.getDate() + offset)
+
+  return toLocalIsoDate(baseDate)
+}
+
 function toChartPoint(item, index, totalCount) {
   const left = 4
   const width = 292
@@ -197,6 +212,9 @@ function ReportScreen({
   const [hoveredChartSlot, setHoveredChartSlot] = useState(null)
   const visibleYear = visibleMonth.getFullYear()
   const visibleMonthNumber = visibleMonth.getMonth() + 1
+  const todayLocalDate = toLocalIsoDate()
+  const selectedDailyDate = report?.date ?? todayLocalDate
+  const canMoveToNextDailyDate = selectedDailyDate < todayLocalDate
 
   useEffect(() => {
     setView(initialView)
@@ -212,7 +230,6 @@ function ReportScreen({
 
   const hasDailySamples = Number(report?.cvStats?.sampleCount ?? 0) > 0
   const dailyScore = hasDailySamples ? report?.cvStats?.averageScore : null
-  const hasDailyScore = typeof dailyScore === 'number'
   const scoreLabel = typeof dailyScore === 'number' ? `${Math.round(dailyScore)}점` : '--'
   const yesterdayScore = report?.averageScoreComparison?.yesterday?.averageScore
   const yesterdayLabel =
@@ -239,6 +256,11 @@ function ReportScreen({
     setView('daily')
   }
 
+  async function moveDailyDate(offset) {
+    const nextDate = addDaysToIsoDate(selectedDailyDate, offset)
+    await openDailyReport(nextDate)
+  }
+
   return (
     <main className={`app-frame report-screen ${view === 'daily' ? 'daily-report-screen' : ''}`}>
       <header className="report-top">
@@ -251,27 +273,49 @@ function ReportScreen({
           <ArrowLeft size={28} />
         </button>
         <div className="report-title">
-          <h1>{view === 'daily' ? '일일 리포트' : '월별 리포트'}</h1>
+          <div className="report-title-row">
+            <h1>{view === 'daily' ? '일일 리포트' : '월별 리포트'}</h1>
+            <div className="report-toggle" role="tablist" aria-label="리포트 종류">
+              <button
+                className={view === 'daily' ? 'active' : ''}
+                type="button"
+                onClick={() => setView('daily')}
+              >
+                일일
+              </button>
+              <button
+                className={view === 'monthly' ? 'active' : ''}
+                type="button"
+                onClick={() => setView('monthly')}
+              >
+                월별
+              </button>
+            </div>
+          </div>
           <p>
-            {view === 'daily' ? formatKoreanDate(report?.date) : '날짜별 자세 리포트를 확인하세요'}
+            {view === 'daily'
+              ? formatKoreanDate(selectedDailyDate)
+              : '날짜별 자세 리포트를 확인하세요'}
           </p>
         </div>
-        <div className="report-toggle" role="tablist" aria-label="리포트 종류">
-          <button
-            className={view === 'daily' ? 'active' : ''}
-            type="button"
-            onClick={() => setView('daily')}
-          >
-            일일
-          </button>
-          <button
-            className={view === 'monthly' ? 'active' : ''}
-            type="button"
-            onClick={() => setView('monthly')}
-          >
-            월별
-          </button>
-        </div>
+        {view === 'daily' ? (
+          <div className="report-date-nav" aria-label="일일 리포트 날짜 이동">
+            <button type="button" onClick={() => void moveDailyDate(-1)} aria-label="이전 날짜">
+              <ChevronLeft size={24} />
+            </button>
+            <span>
+              {selectedDailyDate === todayLocalDate ? '오늘' : formatKoreanDate(selectedDailyDate)}
+            </span>
+            <button
+              type="button"
+              onClick={() => void moveDailyDate(1)}
+              disabled={!canMoveToNextDailyDate}
+              aria-label="다음 날짜"
+            >
+              <ChevronRight size={24} />
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {view === 'daily' ? (
@@ -279,7 +323,6 @@ function ReportScreen({
           <section className="report-card trend-card">
             <div className="card-heading">
               <h2>오늘의 자세 추이</h2>
-              <strong>{hasDailyScore ? `양호 ${Math.round(dailyScore)}점` : '--'}</strong>
             </div>
             <div className="chart-shell">
               <div className="chart-y-labels" aria-hidden="true">
