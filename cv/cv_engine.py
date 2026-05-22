@@ -13,6 +13,32 @@ class PostureEngine:
         self.minute_start_time = time.time()
         self.last_sample_time = time.time()
 
+    def export_runtime_state(self):
+        now = time.time()
+
+        return {
+            "sensitivity": float(self.sensitivity),
+            "cumulative_score": float(self.cumulative_score),
+            "neck_stage": int(self.neck_stage),
+            "minute_samples": [float(sample) for sample in self.minute_samples],
+            "minute_elapsed_sec": max(0.0, now - self.minute_start_time)
+        }
+
+    def import_runtime_state(self, state):
+        now = time.time()
+        minute_elapsed_sec = float(state.get("minute_elapsed_sec", 0.0))
+
+        self.sensitivity = float(state.get("sensitivity", self.sensitivity))
+        self.cumulative_score = float(state.get("cumulative_score", self.cumulative_score))
+        self.neck_stage = int(state.get("neck_stage", self.neck_stage))
+        self.minute_samples = [
+            float(sample)
+            for sample in state.get("minute_samples", [])
+            if isinstance(sample, (int, float))
+        ]
+        self.minute_start_time = now - min(max(0.0, minute_elapsed_sec), self.rep_window_sec)
+        self.last_sample_time = now
+
     def update_logic(self, rep_value):
         """1분 단위 계산 및 데이터 분류 : 일단 소숫점 두자리에서 자르게 해놨는데 그냥 정수로 만들어도 크게 상관은 없을거 같아용"""
         rep_value = round(float(rep_value), 2)
