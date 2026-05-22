@@ -273,6 +273,11 @@ def main():
                     cmd = CMD_QUEUE.pop(0)
                     if cmd['type'] == 'SET_SENSITIVITY':
                         engine.sensitivity = float(cmd['value'])
+                    elif cmd['type'] == 'SET_BASELINE':
+                        calib_bl = float(cmd['value'])
+                        calib_phase = None
+                    elif cmd['type'] == 'SET_RUNTIME_STATE':
+                        engine.import_runtime_state(cmd.get('value', {}))
                     elif cmd['type'] == 'START_CALIB':
                         calib_phase = 'running'
                         calib_start = now_t
@@ -342,6 +347,8 @@ def main():
                     cv2.waitKey(1)
 
         finally:
+            send_to_node("RUNTIME_STATE", engine.export_runtime_state())
+
             # 3. [백엔드 DB 전용 전송] 프로그램 종료 시 세션 전체 데이터를 한꺼번에 전송
             if engine.db_session_history:
                 send_to_node("SESSION_DB_REPORT", {
