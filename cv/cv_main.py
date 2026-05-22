@@ -244,12 +244,10 @@ def main():
     calib_start = 0
     calib_buf = []
     show_window = False # 카메라 화면(프리뷰)을 띄울지 여부
+    monitoring_active = False
 
-    cap = open_preferred_camera() # 카메라 기동
-    if cap is None:
-        send_to_node("CAMERA_ERROR", "iPhone 카메라를 제외한 사용 가능한 카메라를 찾을 수 없습니다. MacBook 내장 카메라 권한 또는 다른 앱의 카메라 사용 여부를 확인해주세요.")
-        return
-
+    cap = None
+    preview_active = False
     last_frame_sent = 0.0
     
     # 2. MediaPipe 로드
@@ -262,10 +260,11 @@ def main():
 
     with (mp_vision.PoseLandmarker.create_from_options(pose_opt) as plm,
           mp_vision.FaceLandmarker.create_from_options(face_opt) as flm):
+        send_to_node("STATUS", "CV_READY")
         
         try:
             # STOP_PROCESS 명령을 받으면 finally로 내려가 카메라/리소스를 정리
-            while cap.isOpened() and not STOP_REQUESTED:
+            while not STOP_REQUESTED:
                 now_t = time.time()
 
                 # [STEP 1] 백엔드에서 시킨 일 처리 (민감도 조절, 캘리브레이션 시작 등)
@@ -278,12 +277,44 @@ def main():
                         calib_phase = None
                     elif cmd['type'] == 'SET_RUNTIME_STATE':
                         engine.import_runtime_state(cmd.get('value', {}))
+                    elif cmd['type'] in ('START_PREVIEW', 'RESUME_MONITORING'):
+                        if cap is None or not cap.isOpened():
+                            cap = open_preferred_camera()
+                            if cap is None:
+                                preview_active = False
+                                send_to_node("CAMERA_ERROR", "iPhone 카메라를 제외한 사용 가능한 카메라를 찾을 수 없습니다. MacBook 내장 카메라 권한 또는 다른 앱의 카메라 사용 여부를 확인해주세요.")
+                                continue
+
+                        preview_active = True
+                        monitoring_active = cmd['type'] == 'RESUME_MONITORING'
+                        last_frame_sent = 0.0
+                        send_to_node("STATUS", "PREVIEW_STARTED")
+                    elif cmd['type'] == 'PAUSE_MONITORING':
+                        send_to_node("RUNTIME_STATE", engine.export_runtime_state())
+                        preview_active = False
+                        monitoring_active = False
+                        if cap is not None:
+                            cap.release()
+                            cap = None
+                        send_to_node("STATUS", "PREVIEW_PAUSED")
                     elif cmd['type'] == 'START_CALIB':
+                        if cap is None or not cap.isOpened():
+                            cap = open_preferred_camera()
+                            if cap is None:
+                                send_to_node("CAMERA_ERROR", "iPhone 카메라를 제외한 사용 가능한 카메라를 찾을 수 없습니다. MacBook 내장 카메라 권한 또는 다른 앱의 카메라 사용 여부를 확인해주세요.")
+                                continue
+
+                        preview_active = True
+                        monitoring_active = True
                         calib_phase = 'running'
                         calib_start = now_t
                         calib_buf = []
                         show_window = False
                         send_to_node("STATUS", "CALIBRATION_STARTED")
+
+                if not preview_active or cap is None or not cap.isOpened():
+                    time.sleep(0.05)
+                    continue
 
                 # [STEP 2] 영상 분석
                 ret, frame = cap.read()
@@ -323,8 +354,8 @@ def main():
                                     cv2.destroyAllWindows() # 프리뷰 창 닫기
                                     send_to_node("CALIB_DONE", {"baseline": calib_bl})
 
-                            # 기준값이 잡혔다면 실시간 점수 계산 시작
-                            if calib_bl:
+                            # 기준값이 잡히고 측정 중일 때만 실시간 점수 계산 시작
+                            if calib_bl and monitoring_active:
                                 pos_pct = max(0.0, (f_norm - calib_bl) / calib_bl)
                                 score = (pos_pct * 100) + abs(metrics["sh_angle"])
                                 
@@ -355,7 +386,8 @@ def main():
                     "data": engine.db_session_history # [{timestamp, rep_value}, ...]
                 })
             
-            cap.release()
+            if cap is not None:
+                cap.release()
             cv2.destroyAllWindows()
             send_to_node("LOG", "Engine Process Terminated.")
 
