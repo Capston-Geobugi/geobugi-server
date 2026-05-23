@@ -1,0 +1,12 @@
+# Frontend (Electron + React)
+
+#rive
+@rive-app/react-canvas
+lucide-react
+
+
+# Backend (Python) 일단 대충 기억나는 것들만 썼어용
+
+opencv-python
+mediapipe
+numpy

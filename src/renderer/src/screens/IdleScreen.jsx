@@ -34,30 +34,30 @@ function IdleScreen({
     const smoothNeckRef = useRef(neckStage)
     useEffect(() => {
 
-    let animationFrame
+      let animationFrame
 
-    function animate() {
+      function animate() {
 
-      if (!neckInput) return
+        if (!neckInput) return
 
-      const current = smoothNeckRef.current
-      const target = neckStage
+        const current = smoothNeckRef.current
+        const target = neckStage
 
-      // ⭐ 부드럽게 따라가기
-      const next = current + (target - current) * 0.03
+        // 부드럽게 따라가게
+        const next = current + (target - current) * 0.03
 
-      smoothNeckRef.current = next
+        smoothNeckRef.current = next
 
-      neckInput.value = next
+        neckInput.value = next
 
-      animationFrame = requestAnimationFrame(animate)
-    }
+        animationFrame = requestAnimationFrame(animate)
+      }
 
-    animate()
+      animate()
 
-    return () => cancelAnimationFrame(animationFrame)
+      return () => cancelAnimationFrame(animationFrame)
 
-  }, [neckInput, neckStage])
+    }, [neckInput, neckStage])
   return (
     <main className="idle-widget" style={{ opacity: widgetOpacity }}>
       <div className="idle-turtle-zone" style={{ '--widget-scale': widgetScale }}>
