@@ -32,6 +32,24 @@ const api = {
     openCalibration: () => electronAPI.ipcRenderer.invoke('window:openCalibration'),
     completeCalibration: () => electronAPI.ipcRenderer.invoke('window:completeCalibration'),
     openHome: () => electronAPI.ipcRenderer.invoke('window:openHome'),
+    openStretching: () => electronAPI.ipcRenderer.invoke('window:openStretching'),
+    completeStretching: () => electronAPI.ipcRenderer.invoke('window:completeStretching'),
+    onNavigate: (callback) => {
+      const listener = (_event, screen) => callback(screen)
+      ipcRenderer.on('app:navigate', listener)
+
+      return () => {
+        ipcRenderer.removeListener('app:navigate', listener)
+      }
+    },
+    onStretchingCompleted: (callback) => {
+      const listener = () => callback()
+      ipcRenderer.on('stretching:completed', listener)
+
+      return () => {
+        ipcRenderer.removeListener('stretching:completed', listener)
+      }
+    },
     onCalibrationCompleted: (callback) => {
       const listener = () => callback()
       ipcRenderer.on('calibration:completed', listener)

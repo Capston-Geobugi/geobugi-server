@@ -176,6 +176,23 @@ function registerWindowHandlers() {
     mainWindow?.focus()
     return { ok: true }
   })
+
+  ipcMain.handle('window:openStretching', () => {
+    mainWindow?.show()
+    mainWindow?.focus()
+    mainWindow?.webContents.send('app:navigate', 'stretching')
+    return { ok: true }
+  })
+
+  ipcMain.handle('window:completeStretching', () => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('stretching:completed')
+      }
+    })
+
+    return { ok: true }
+  })
 }
 
 app.whenReady().then(() => {
