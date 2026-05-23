@@ -171,8 +171,8 @@ export const geobugiApi = {
     }
 
     const mission = await window.api.stretching.createMission({
-      missionType: 'shoulder',
-      reason: 'shoulder_asymmetry',
+      missionType: 'neck',
+      reason: 'neck_tension',
       verificationMode: 'manual'
     })
 
