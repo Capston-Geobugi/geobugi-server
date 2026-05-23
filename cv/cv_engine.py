@@ -58,6 +58,20 @@ class PostureEngine:
         }
         self.db_session_history.append(db_record)
 
+    def flush_current_window(self):
+        if self.minute_samples:
+            rep_val = np.median(self.minute_samples)
+            self.update_logic(rep_val)
+
+        self.minute_samples = []
+        self.minute_start_time = time.time()
+        self.last_sample_time = self.minute_start_time
+
+    def drain_session_history(self):
+        records = self.db_session_history
+        self.db_session_history = []
+        return records
+
     def process_frame_data(self, current_score, is_paused):
         now = time.time()
         if now - self.last_sample_time >= 1.0:
@@ -67,11 +81,6 @@ class PostureEngine:
             
         elapsed = now - self.minute_start_time
         if elapsed >= self.rep_window_sec:
-            if self.minute_samples:
-                rep_val = np.median(self.minute_samples)
-                self.update_logic(rep_val)
-            
-            self.minute_samples = []
-            self.minute_start_time = now
+            self.flush_current_window()
             return True
         return False

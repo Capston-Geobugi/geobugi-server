@@ -55,6 +55,13 @@ def send_to_node(msg_type, payload):
     message = {"type": msg_type, "payload": payload}
     print(json.dumps(message), flush=True)
 
+def send_session_db_report(engine):
+    session_history = engine.drain_session_history()
+    if session_history:
+        send_to_node("SESSION_DB_REPORT", {
+            "data": session_history # [{timestamp, rep_value}, ...]
+        })
+
 def send_frame_to_node(frame):
     """Electron 측정 화면에 표시할 카메라 프레임을 전송"""
     preview = cv2.resize(frame, (512, 288))
@@ -290,6 +297,8 @@ def main():
                         last_frame_sent = 0.0
                         send_to_node("STATUS", "PREVIEW_STARTED")
                     elif cmd['type'] == 'PAUSE_MONITORING':
+                        engine.flush_current_window()
+                        send_session_db_report(engine)
                         send_to_node("RUNTIME_STATE", engine.export_runtime_state())
                         preview_active = False
                         monitoring_active = False
@@ -378,13 +387,11 @@ def main():
                     cv2.waitKey(1)
 
         finally:
+            engine.flush_current_window()
             send_to_node("RUNTIME_STATE", engine.export_runtime_state())
 
             # 3. [백엔드 DB 전용 전송] 프로그램 종료 시 세션 전체 데이터를 한꺼번에 전송
-            if engine.db_session_history:
-                send_to_node("SESSION_DB_REPORT", {
-                    "data": engine.db_session_history # [{timestamp, rep_value}, ...]
-                })
+            send_session_db_report(engine)
             
             if cap is not None:
                 cap.release()
