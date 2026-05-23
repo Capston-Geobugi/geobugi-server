@@ -2,12 +2,14 @@
 import { Activity } from 'lucide-react'
 
 import useTurtleController from '../hooks/useTurtleController'
-import { useRive } from '@rive-app/react-canvas'
-import turtleRiv from '../assets/turtle.riv'
+import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
 
 import BottomNav from '../components/BottomNav'
+import { useEffect} from 'react'
 
-function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, onSettings }) {
+
+function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, onSettings, neckStage }) {
+  
   const scoreLabel = typeof score === 'number' ? `${score}점` : '--'
   const hasScore = typeof score === 'number'
   const { rive, RiveComponent } = useRive({
@@ -15,6 +17,19 @@ function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, 
     stateMachines: 'State Machine 1',
     autoplay: true,
   })
+  
+  const neckInput = useStateMachineInput(
+    rive,
+    'State Machine 1',
+    'neck_step'
+  )
+
+  useEffect(() => {
+    if (!neckInput) return
+    
+    neckInput.value = neckStage ?? 1
+  }, [neckInput, neckStage])
+  
   useTurtleController(rive)
 
   return (
