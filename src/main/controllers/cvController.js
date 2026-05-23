@@ -13,6 +13,7 @@ let calibrationBaseline = null
 let runtimeState = null
 let cvReady = false
 let cvReadyWaiters = []
+let cvPauseWaiters = []
 let isQuittingAfterCvShutdown = false
 
 const MIN_USER_SENSITIVITY = 1
@@ -113,6 +114,11 @@ function handleCvMessage(message) {
     cvReady = true
     cvReadyWaiters.forEach((resolve) => resolve(getCvStatus()))
     cvReadyWaiters = []
+  }
+
+  if (message.type === 'STATUS' && message.payload === 'PREVIEW_PAUSED') {
+    cvPauseWaiters.forEach((resolve) => resolve(getCvStatus()))
+    cvPauseWaiters = []
   }
 
   if (message.type === 'REALTIME_UPDATE') {
@@ -216,6 +222,22 @@ function waitForCvReady(timeoutMs = 20000) {
   })
 }
 
+function waitForCvPause(timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      cvPauseWaiters = cvPauseWaiters.filter((waiter) => waiter !== finish)
+      resolve(getCvStatus())
+    }, timeoutMs)
+
+    function finish(status) {
+      clearTimeout(timeout)
+      resolve(status)
+    }
+
+    cvPauseWaiters.push(finish)
+  })
+}
+
 function getSavedCalibrationBaseline() {
   const row = getDB()
     .prepare(
@@ -291,13 +313,13 @@ export function startCvPreview() {
   return getCvStatus()
 }
 
-export function pauseCvMonitoring() {
+export async function pauseCvMonitoring() {
   if (!cvProcess || cvProcess.killed) {
     return getCvStatus()
   }
 
   sendCommand({ type: 'PAUSE_MONITORING' })
-  return getCvStatus()
+  return waitForCvPause()
 }
 
 export function resumeCvMonitoring() {
