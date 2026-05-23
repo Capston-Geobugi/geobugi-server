@@ -1,12 +1,19 @@
 /* eslint-disable react/prop-types */
 import { Activity } from 'lucide-react'
 
-import turtleImage from '../assets/geobugi-turtle.png'
+import { useRive } from '@rive-app/react-canvas'
+import turtleRiv from '../assets/turtle.riv'
+
 import BottomNav from '../components/BottomNav'
 
 function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, onSettings }) {
   const scoreLabel = typeof score === 'number' ? `${score}점` : '--'
   const hasScore = typeof score === 'number'
+  const { RiveComponent } = useRive({
+    src: '/src/assets/turtle.riv',
+    stateMachines: 'State Machine 1',
+    autoplay: true,
+  })
 
   return (
     <main className="app-frame home-screen">
@@ -23,7 +30,9 @@ function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, 
                 : '먼저 바른 자세를 측정해주세요.'}
           </p>
         </div>
-        <img className="turtle-image" src={turtleImage} alt="" />
+        <div className="turtle-image">
+          <RiveComponent />
+        </div>
       </section>
 
       <section className="home-card">
