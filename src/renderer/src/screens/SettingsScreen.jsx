@@ -50,6 +50,9 @@ function SliderField({
   onCommit
 }) {
   const progress = ((value - min) / (max - min)) * 100
+  const handleCommit = (event) => {
+    onCommit?.(Number(event.currentTarget.value))
+  }
 
   return (
     <label className="settings-slider">
@@ -62,8 +65,8 @@ function SliderField({
         value={value}
         style={{ '--range-progress': `${progress}%` }}
         onChange={(event) => onChange(Number(event.target.value))}
-        onPointerUp={onCommit}
-        onKeyUp={onCommit}
+        onPointerUp={handleCommit}
+        onKeyUp={handleCommit}
       />
       <em>
         <small>{leftLabel}</small>
@@ -229,8 +232,10 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
     }
   }
 
-  async function commitStretchingSettings() {
-    const intervalMinutes = clamp(settings.stretching.intervalMinutes, 10, 240)
+  async function commitStretchingSettings(
+    nextIntervalMinutes = settings.stretching.intervalMinutes
+  ) {
+    const intervalMinutes = clamp(nextIntervalMinutes, 10, 240)
 
     setError('')
     setSavingKey('stretching')
@@ -456,7 +461,7 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
               }
             }))
           }
-          onCommit={() => void commitStretchingSettings()}
+          onCommit={(value) => void commitStretchingSettings(value)}
         />
       </section>
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { geobugiApi } from './lib/api'
 import CalibrationScreen from './screens/CalibrationScreen'
@@ -27,6 +27,11 @@ function App() {
   const [cvRealtime, setCvRealtime] = useState(null)
   const [paused, setPaused] = useState(false)
   const [reportInitialView, setReportInitialView] = useState('daily')
+  const [stretchingReminderVisible, setStretchingReminderVisible] = useState(false)
+  const [stretchingTimerStartedAt, setStretchingTimerStartedAt] = useState(() => Date.now())
+  const stretchingIntervalRef = useRef(null)
+  const stretchingIntervalMinutes = Number(settings?.stretching?.intervalMinutes ?? 60)
+  const hasCompletedPostureMeasurement = Boolean(calibration)
 
   const postureScore = useMemo(() => {
     if (typeof cvRealtime?.cumulative_score === 'number') {
@@ -52,6 +57,11 @@ function App() {
     return monthly
   }, [])
 
+  const restartStretchingTimer = useCallback(() => {
+    setStretchingReminderVisible(false)
+    setStretchingTimerStartedAt(Date.now())
+  }, [])
+
   const bootstrapServerState = useCallback(async () => {
     setBootMessage('앱 설정을 불러오고 있어요')
     setBootProgress(12)
@@ -68,6 +78,8 @@ function App() {
     }
 
     setSettings(appSettings)
+    stretchingIntervalRef.current = Number(appSettings?.stretching?.intervalMinutes ?? 60)
+    restartStretchingTimer()
 
     if (shouldPrepareCvOnBoot) {
       setBootMessage('자세 측정 엔진을 준비하고 있어요')
@@ -77,7 +89,7 @@ function App() {
     }
 
     setBootReady(true)
-  }, [refreshMonthlyReport, refreshReport, shouldPrepareCvOnBoot])
+  }, [refreshMonthlyReport, refreshReport, restartStretchingTimer, shouldPrepareCvOnBoot])
 
   const handleCalibrationDone = useCallback(
     async (payload) => {
@@ -93,6 +105,7 @@ function App() {
       })
 
       setCalibration(saved)
+      restartStretchingTimer()
 
       if (isCalibrationWindow && window.api?.appWindow?.completeCalibration) {
         await window.api.appWindow.completeCalibration()
@@ -101,7 +114,7 @@ function App() {
 
       setScreen('home')
     },
-    [isCalibrationWindow]
+    [isCalibrationWindow, restartStretchingTimer]
   )
 
   useEffect(() => {
@@ -135,10 +148,31 @@ function App() {
 
     return window.api.appWindow.onCalibrationCompleted(async () => {
       setCalibration({ id: 1 })
+      restartStretchingTimer()
       await refreshReport()
       setScreen('home')
     })
-  }, [refreshReport])
+  }, [refreshReport, restartStretchingTimer])
+
+  useEffect(() => {
+    if (!window.api?.appWindow?.onNavigate) {
+      return undefined
+    }
+
+    return window.api.appWindow.onNavigate((nextScreen) => {
+      if (typeof nextScreen === 'string') {
+        setScreen(nextScreen)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!window.api?.appWindow?.onStretchingCompleted) {
+      return undefined
+    }
+
+    return window.api.appWindow.onStretchingCompleted(restartStretchingTimer)
+  }, [restartStretchingTimer])
 
   useEffect(() => {
     if (!window.api?.cv?.onEvent) {
@@ -187,7 +221,47 @@ function App() {
     })
   }, [])
 
-  useEffect(() => geobugiApi.onSettingsChanged(setSettings), [])
+  useEffect(() => {
+    return geobugiApi.onSettingsChanged((nextSettings) => {
+      setSettings(nextSettings)
+
+      const nextStretchingInterval = Number(nextSettings?.stretching?.intervalMinutes ?? 60)
+      if (stretchingIntervalRef.current !== nextStretchingInterval) {
+        stretchingIntervalRef.current = nextStretchingInterval
+        restartStretchingTimer()
+      }
+    })
+  }, [restartStretchingTimer])
+
+  useEffect(() => {
+    if (
+      !bootReady ||
+      !settings ||
+      !hasCompletedPostureMeasurement ||
+      !Number.isFinite(stretchingIntervalMinutes) ||
+      stretchingReminderVisible ||
+      screen === 'stretching'
+    ) {
+      return undefined
+    }
+
+    const intervalMs = Math.max(1, stretchingIntervalMinutes) * 60 * 1000
+    const elapsedMs = Date.now() - stretchingTimerStartedAt
+    const remainingMs = Math.max(0, intervalMs - elapsedMs)
+    const timerId = window.setTimeout(() => {
+      setStretchingReminderVisible(true)
+    }, remainingMs)
+
+    return () => window.clearTimeout(timerId)
+  }, [
+    bootReady,
+    hasCompletedPostureMeasurement,
+    screen,
+    settings,
+    stretchingIntervalMinutes,
+    stretchingReminderVisible,
+    stretchingTimerStartedAt
+  ])
 
   async function handleCalibrationStart() {
     setCvError('')
@@ -198,7 +272,20 @@ function App() {
   async function handleStretchingComplete() {
     await geobugiApi.completeStretching()
     await refreshReport()
+    restartStretchingTimer()
+    if (window.api?.appWindow?.completeStretching) {
+      await window.api.appWindow.completeStretching()
+    }
     setScreen('home')
+  }
+
+  function handleOpenStretching() {
+    if (screen === 'idle' && window.api?.appWindow?.openStretching) {
+      void window.api.appWindow.openStretching()
+      return
+    }
+
+    setScreen('stretching')
   }
 
   async function handlePauseMonitoring() {
@@ -227,13 +314,17 @@ function App() {
 
   if (screen === 'idle') {
     return (
-      <IdleScreen
-        realtime={cvRealtime}
-        paused={paused}
-        widgetSettings={settings?.widget}
-        onPause={handlePauseMonitoring}
-        onOpenHome={handleOpenHomeFromIdle}
-      />
+      <>
+        <IdleScreen
+          realtime={cvRealtime}
+          paused={paused}
+          widgetSettings={settings?.widget}
+          showStretchingReminder={stretchingReminderVisible && hasCompletedPostureMeasurement}
+          onPause={handlePauseMonitoring}
+          onOpenHome={handleOpenHomeFromIdle}
+          onOpenStretching={handleOpenStretching}
+        />
+      </>
     )
   }
 
@@ -268,7 +359,7 @@ function App() {
         onLoadMonthlyReport={refreshMonthlyReport}
         onOpenReport={() => setScreen('report')}
         initialView={reportInitialView}
-        onOpenStretching={() => setScreen('stretching')}
+        onOpenStretching={handleOpenStretching}
         onOpenSettings={() => setScreen('settings')}
       />
     )
@@ -288,30 +379,32 @@ function App() {
           setReportInitialView('daily')
           setScreen('report')
         }}
-        onOpenStretching={() => setScreen('stretching')}
+        onOpenStretching={handleOpenStretching}
       />
     )
   }
 
   return (
-    <HomeScreen
-      hasCalibration={Boolean(calibration)}
-      score={postureScore}
-      onMeasure={async () => {
-        if (window.api?.appWindow?.openCalibration) {
-          await window.api.appWindow.openCalibration()
-          return
-        }
+    <>
+      <HomeScreen
+        hasCalibration={Boolean(calibration)}
+        score={postureScore}
+        onMeasure={async () => {
+          if (window.api?.appWindow?.openCalibration) {
+            await window.api.appWindow.openCalibration()
+            return
+          }
 
-        setScreen('calibration')
-      }}
-      onReport={() => {
-        setReportInitialView('daily')
-        setScreen('report')
-      }}
-      onStretching={() => setScreen('stretching')}
-      onSettings={() => setScreen('settings')}
-    />
+          setScreen('calibration')
+        }}
+        onReport={() => {
+          setReportInitialView('daily')
+          setScreen('report')
+        }}
+        onStretching={handleOpenStretching}
+        onSettings={() => setScreen('settings')}
+      />
+    </>
   )
 }
 

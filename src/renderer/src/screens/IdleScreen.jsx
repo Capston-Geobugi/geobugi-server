@@ -1,9 +1,17 @@
 /* eslint-disable react/prop-types */
-import { Grid2X2, Pause, Play } from 'lucide-react'
+import { Dumbbell, Grid2X2, Pause, Play } from 'lucide-react'
 
 import turtleImage from '../assets/geobugi-turtle.png'
 
-function IdleScreen({ realtime, paused, widgetSettings, onPause, onOpenHome }) {
+function IdleScreen({
+  realtime,
+  paused,
+  widgetSettings,
+  showStretchingReminder,
+  onPause,
+  onOpenHome,
+  onOpenStretching
+}) {
   const neckStage = realtime?.neck_stage ?? 1
   const cumulativeScore = realtime?.cumulative_score ?? 0
   const widgetOpacity = Number(widgetSettings?.opacity ?? 1)
@@ -12,7 +20,7 @@ function IdleScreen({ realtime, paused, widgetSettings, onPause, onOpenHome }) {
   return (
     <main className="idle-widget" style={{ opacity: widgetOpacity }}>
       <div className="idle-turtle-zone" style={{ '--widget-scale': widgetScale }}>
-        <div className="idle-controls">
+        <div className={`idle-controls ${showStretchingReminder ? 'with-stretching' : ''}`}>
           <button className="idle-menu" onClick={onOpenHome} aria-label="홈 화면 열기">
             <Grid2X2 size={21} />
           </button>
@@ -28,6 +36,15 @@ function IdleScreen({ realtime, paused, widgetSettings, onPause, onOpenHome }) {
             )}
           </button>
         </div>
+        {showStretchingReminder ? (
+          <button
+            className="idle-stretching"
+            onClick={onOpenStretching}
+            aria-label="스트레칭 알림 열기"
+          >
+            <Dumbbell size={19} strokeWidth={3.1} />
+          </button>
+        ) : null}
 
         <div className="idle-turtle" style={{ '--neck-stage': neckStage }}>
           <img src={turtleImage} alt="" />

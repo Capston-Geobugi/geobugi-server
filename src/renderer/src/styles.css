@@ -1297,6 +1297,7 @@ button:disabled {
 }
 
 .settings-slider {
+  position: relative;
   display: grid;
   gap: 10px;
   margin-top: 18px;
@@ -1828,13 +1829,17 @@ button:disabled {
   bottom: 34px;
   width: 165px;
   height: 226px;
+  --idle-button-size: 40px;
+  --idle-button-gap: 10px;
+  --turtle-visual-height: calc(115px * var(--widget-scale));
+  --idle-reminder-bottom: max(68px, calc(var(--turtle-visual-height) - 31px));
 }
 
 .idle-controls {
   position: absolute;
-  top: 0;
   right: 0;
-  z-index: 2;
+  bottom: var(--idle-reminder-bottom);
+  z-index: 4;
   display: grid;
   gap: 10px;
   opacity: 0;
@@ -1843,6 +1848,10 @@ button:disabled {
   transition:
     opacity 140ms ease,
     transform 140ms ease;
+}
+
+.idle-controls.with-stretching {
+  bottom: calc(var(--idle-reminder-bottom) + var(--idle-button-size) + var(--idle-button-gap));
 }
 
 .idle-turtle-zone:hover .idle-controls,
@@ -1855,10 +1864,11 @@ button:disabled {
 .idle-controls button {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: var(--idle-button-size);
+  height: var(--idle-button-size);
   border: 0;
   border-radius: 999px;
+  outline: none;
   cursor: pointer;
 }
 
@@ -1870,6 +1880,24 @@ button:disabled {
 .idle-pause {
   color: #ff4b4b;
   background: #ffe2e2;
+}
+
+.idle-stretching {
+  position: absolute;
+  right: 0;
+  bottom: var(--idle-reminder-bottom);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: var(--idle-button-size);
+  height: var(--idle-button-size);
+  border: 0;
+  border-radius: 999px;
+  outline: none;
+  color: #fff;
+  background: #ff7a1a;
+  box-shadow: none;
+  cursor: pointer;
 }
 
 .idle-turtle {
