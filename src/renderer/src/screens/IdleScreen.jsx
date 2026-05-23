@@ -2,6 +2,7 @@
 import { Dumbbell, Grid2X2, Pause, Play } from 'lucide-react'
 import useTurtleController from '../hooks/useTurtleController'
 import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
+import { useEffect, useRef } from 'react'
 
 function IdleScreen({
   realtime,
@@ -23,14 +24,40 @@ function IdleScreen({
   })
   useTurtleController(rive)
   const neckInput = useStateMachineInput(
-    rive,
-    'State Machine 1',
-    'neck_step'
-  )
-  if (neckInput) {
-    neckInput.value = neckStage
-  } 
+      rive,
+      'State Machine 1',
+      'neck_step'
+    )
+    if (neckInput) {
+      neckInput.value = neckStage
+    } 
+    const smoothNeckRef = useRef(neckStage)
+    useEffect(() => {
 
+    let animationFrame
+
+    function animate() {
+
+      if (!neckInput) return
+
+      const current = smoothNeckRef.current
+      const target = neckStage
+
+      // ⭐ 부드럽게 따라가기
+      const next = current + (target - current) * 0.03
+
+      smoothNeckRef.current = next
+
+      neckInput.value = next
+
+      animationFrame = requestAnimationFrame(animate)
+    }
+
+    animate()
+
+    return () => cancelAnimationFrame(animationFrame)
+
+  }, [neckInput, neckStage])
   return (
     <main className="idle-widget" style={{ opacity: widgetOpacity }}>
       <div className="idle-turtle-zone" style={{ '--widget-scale': widgetScale }}>
