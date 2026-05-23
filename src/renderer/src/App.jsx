@@ -386,14 +386,15 @@ function App() {
 
   return (
     <>
-      <HomeScreen
-        hasCalibration={Boolean(calibration)}
-        score={postureScore}
-        onMeasure={async () => {
-          if (window.api?.appWindow?.openCalibration) {
-            await window.api.appWindow.openCalibration()
-            return
-          }
+    <HomeScreen
+      hasCalibration={Boolean(calibration)}
+      score={postureScore}
+      neckStage={cvRealtime?.neck_stage ?? 1}
+      onMeasure={async () => {
+        if (window.api?.appWindow?.openCalibration) {
+          await window.api.appWindow.openCalibration()
+          return
+        }
 
           setScreen('calibration')
         }}

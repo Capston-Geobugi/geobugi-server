@@ -343,11 +343,21 @@ button:disabled {
 .turtle-image {
   position: static;
   align-self: center;
+
   width: 220px;
+  height: 220px;
+
   max-width: 88%;
+
   margin-top: 28px;
-  transform: none;
+
   pointer-events: none;
+}
+
+.turtle-image canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 .home-card,
@@ -1911,6 +1921,12 @@ button:disabled {
 
 .idle-turtle img {
   width: 100%;
+  display: block;
+}
+
+.idle-turtle canvas {
+  width: 100% !important;
+  height: 100% !important;
   display: block;
 }
 

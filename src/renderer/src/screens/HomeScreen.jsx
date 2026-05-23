@@ -1,12 +1,36 @@
 /* eslint-disable react/prop-types */
 import { Activity } from 'lucide-react'
 
-import turtleImage from '../assets/geobugi-turtle.png'
-import BottomNav from '../components/BottomNav'
+import useTurtleController from '../hooks/useTurtleController'
+import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
 
-function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, onSettings }) {
+import BottomNav from '../components/BottomNav'
+import { useEffect} from 'react'
+
+
+function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, onSettings, neckStage }) {
+  
   const scoreLabel = typeof score === 'number' ? `${score}점` : '--'
   const hasScore = typeof score === 'number'
+  const { rive, RiveComponent } = useRive({
+    src: '/src/assets/turtle.riv',
+    stateMachines: 'State Machine 1',
+    autoplay: true,
+  })
+  
+  const neckInput = useStateMachineInput(
+    rive,
+    'State Machine 1',
+    'neck_step'
+  )
+
+  useEffect(() => {
+    if (!neckInput) return
+    
+    neckInput.value = neckStage ?? 1
+  }, [neckInput, neckStage])
+  
+  useTurtleController(rive)
 
   return (
     <main className="app-frame home-screen">
@@ -23,7 +47,9 @@ function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, 
                 : '먼저 바른 자세를 측정해주세요.'}
           </p>
         </div>
-        <img className="turtle-image" src={turtleImage} alt="" />
+        <div className="turtle-image">
+          <RiveComponent />
+        </div>
       </section>
 
       <section className="home-card">
