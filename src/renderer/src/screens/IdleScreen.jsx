@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { Dumbbell, Grid2X2, Pause, Play } from 'lucide-react'
-
+import useTurtleController from '../hooks/useTurtleController'
 import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
 
 function IdleScreen({
@@ -21,7 +21,7 @@ function IdleScreen({
     stateMachines: 'State Machine 1',
     autoplay: true,
   })
-
+  useTurtleController(rive)
   const neckInput = useStateMachineInput(
     rive,
     'State Machine 1',

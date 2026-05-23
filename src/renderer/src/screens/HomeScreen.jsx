@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { Activity } from 'lucide-react'
 
+import useTurtleController from '../hooks/useTurtleController'
 import { useRive } from '@rive-app/react-canvas'
 import turtleRiv from '../assets/turtle.riv'
 
@@ -9,11 +10,12 @@ import BottomNav from '../components/BottomNav'
 function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, onSettings }) {
   const scoreLabel = typeof score === 'number' ? `${score}점` : '--'
   const hasScore = typeof score === 'number'
-  const { RiveComponent } = useRive({
+  const { rive, RiveComponent } = useRive({
     src: '/src/assets/turtle.riv',
     stateMachines: 'State Machine 1',
     autoplay: true,
   })
+  useTurtleController(rive)
 
   return (
     <main className="app-frame home-screen">
