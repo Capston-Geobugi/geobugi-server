@@ -44,7 +44,12 @@ import {
   updateStretchingSettings,
   updateWidgetSettings
 } from '../controllers/settingsController'
-import { getProfile, updateProfile } from '../controllers/profileController'
+import {
+  getProfile,
+  linkRemoteUser,
+  unlinkRemoteUser,
+  updateProfile
+} from '../controllers/profileController'
 
 let handlersRegistered = false
 
@@ -104,4 +109,6 @@ export function registerIpcHandlers({ onWidgetSettingsChanged } = {}) {
 
   ipcMain.handle('profile:get', () => getProfile())
   ipcMain.handle('profile:update', (_event, input) => updateProfile(input))
+  ipcMain.handle('profile:linkRemoteUser', (_event, input) => linkRemoteUser(input))
+  ipcMain.handle('profile:unlinkRemoteUser', () => unlinkRemoteUser())
 }
