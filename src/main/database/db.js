@@ -148,6 +148,7 @@ function runMigrations(database) {
 
   insertSetting.run('widget.opacity', '1')
   insertSetting.run('widget.scale', '1')
+  insertSetting.run('widget.flip_x', '0')
   insertSetting.run('stretching.interval_minutes', '60')
 
   const activeSensitivityMode = database

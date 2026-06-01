@@ -10,10 +10,83 @@ let mainWindow = null
 let calibrationWindow = null
 let idleWindow = null
 let calibrationCompleted = false
+let idleWindowPosition = null
 
-const WIDGET_WINDOW_WIDTH = 220
-const WIDGET_WINDOW_HEIGHT = 310
-const WIDGET_MARGIN = 22
+const WIDGET_WINDOW_WIDTH_RATIO = 0.32
+const WIDGET_WINDOW_HEIGHT_RATIO = 0.38
+const WIDGET_MARGIN_RATIO = 0.012
+
+function getWidgetWindowBounds() {
+  const { workArea } = screen.getPrimaryDisplay()
+  const width = Math.round(workArea.width * WIDGET_WINDOW_WIDTH_RATIO)
+  const height = Math.round(workArea.height * WIDGET_WINDOW_HEIGHT_RATIO)
+  const margin = Math.round(Math.min(workArea.width, workArea.height) * WIDGET_MARGIN_RATIO)
+  const defaultBounds = {
+    width,
+    height,
+    x: workArea.x + workArea.width - width - margin,
+    y: workArea.y + workArea.height - height - margin
+  }
+
+  if (!idleWindowPosition) {
+    return defaultBounds
+  }
+
+  return clampWidgetWindowBounds({
+    ...defaultBounds,
+    x: idleWindowPosition.x,
+    y: idleWindowPosition.y
+  })
+}
+
+function clampWidgetWindowBounds(bounds) {
+  const { workArea } = screen.getPrimaryDisplay()
+  const width = Math.min(bounds.width, workArea.width)
+  const height = Math.min(bounds.height, workArea.height)
+  const minX = workArea.x
+  const minY = workArea.y
+  const maxX = workArea.x + workArea.width - width
+  const maxY = workArea.y + workArea.height - height
+
+  return {
+    width,
+    height,
+    x: Math.min(Math.max(Math.round(bounds.x), minX), maxX),
+    y: Math.min(Math.max(Math.round(bounds.y), minY), maxY)
+  }
+}
+
+function normalizeVisualInsets(input = {}, bounds) {
+  const left = Number(input.left)
+  const right = Number(input.right)
+  const top = Number(input.top)
+  const bottom = Number(input.bottom)
+
+  return {
+    left: Number.isFinite(left) ? Math.min(Math.max(left, 0), bounds.width) : 0,
+    right: Number.isFinite(right) ? Math.min(Math.max(right, 0), bounds.width) : 0,
+    top: Number.isFinite(top) ? Math.min(Math.max(top, 0), bounds.height) : 0,
+    bottom: Number.isFinite(bottom) ? Math.min(Math.max(bottom, 0), bounds.height) : 0
+  }
+}
+
+function clampWidgetWindowBoundsByVisualArea(bounds, visualInsets) {
+  const { workArea } = screen.getPrimaryDisplay()
+  const width = bounds.width
+  const height = bounds.height
+  const insets = normalizeVisualInsets(visualInsets, { width, height })
+  const minX = workArea.x - insets.left
+  const minY = workArea.y - insets.top
+  const maxX = workArea.x + workArea.width - width + insets.right
+  const maxY = workArea.y + workArea.height - height + insets.bottom
+
+  return {
+    width,
+    height,
+    x: Math.min(Math.max(Math.round(bounds.x), minX), maxX),
+    y: Math.min(Math.max(Math.round(bounds.y), minY), maxY)
+  }
+}
 
 function getRendererUrl(route = '') {
   if (is.dev) {
@@ -39,13 +112,34 @@ function applyWidgetSettingsToIdleWindow() {
     return
   }
 
-  const { workArea } = screen.getPrimaryDisplay()
+  const currentBounds = idleWindow.getBounds()
+  const bounds = clampWidgetWindowBounds({
+    ...getWidgetWindowBounds(),
+    x: currentBounds.x,
+    y: currentBounds.y
+  })
 
-  idleWindow.setSize(WIDGET_WINDOW_WIDTH, WIDGET_WINDOW_HEIGHT)
-  idleWindow.setPosition(
-    workArea.x + workArea.width - WIDGET_WINDOW_WIDTH - WIDGET_MARGIN,
-    workArea.y + workArea.height - WIDGET_WINDOW_HEIGHT - WIDGET_MARGIN
-  )
+  idleWindow.setBounds(bounds)
+  idleWindowPosition = { x: bounds.x, y: bounds.y }
+  keepIdleWindowOnTop()
+}
+
+function keepIdleWindowOnTop() {
+  if (!idleWindow || idleWindow.isDestroyed()) {
+    return
+  }
+
+  if (process.platform === 'darwin') {
+    idleWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  }
+
+  try {
+    idleWindow.setAlwaysOnTop(true, 'screen-saver')
+  } catch {
+    idleWindow.setAlwaysOnTop(true)
+  }
+
+  idleWindow.moveTop()
 }
 
 function createMainWindow() {
@@ -123,18 +217,20 @@ function createIdleWindow() {
     return
   }
 
-  const { workArea } = screen.getPrimaryDisplay()
+  const bounds = getWidgetWindowBounds()
 
   idleWindow = new BrowserWindow({
-    width: WIDGET_WINDOW_WIDTH,
-    height: WIDGET_WINDOW_HEIGHT,
+    width: bounds.width,
+    height: bounds.height,
     useContentSize: true,
-    x: workArea.x + workArea.width - WIDGET_WINDOW_WIDTH - WIDGET_MARGIN,
-    y: workArea.y + workArea.height - WIDGET_WINDOW_HEIGHT - WIDGET_MARGIN,
+    x: bounds.x,
+    y: bounds.y,
     resizable: false,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
     alwaysOnTop: true,
+    visibleOnAllWorkspaces: process.platform === 'darwin',
     skipTaskbar: true,
     show: false,
     autoHideMenuBar: true,
@@ -145,6 +241,7 @@ function createIdleWindow() {
   })
 
   idleWindow.on('ready-to-show', () => {
+    keepIdleWindowOnTop()
     idleWindow.show()
   })
 
@@ -175,6 +272,39 @@ function registerWindowHandlers() {
     mainWindow?.show()
     mainWindow?.focus()
     return { ok: true }
+  })
+
+  ipcMain.handle('window:closeIdle', () => {
+    idleWindow?.close()
+    return { ok: true }
+  })
+
+  ipcMain.handle('window:getIdleBounds', () => {
+    if (!idleWindow || idleWindow.isDestroyed()) {
+      return getWidgetWindowBounds()
+    }
+
+    return idleWindow.getBounds()
+  })
+
+  ipcMain.handle('window:moveIdle', (_event, input = {}) => {
+    if (!idleWindow || idleWindow.isDestroyed()) {
+      return { ok: false }
+    }
+
+    const currentBounds = idleWindow.getBounds()
+    const requestedBounds = {
+      ...currentBounds,
+      x: Number(input.x ?? currentBounds.x),
+      y: Number(input.y ?? currentBounds.y)
+    }
+    const nextBounds = input.visualInsets
+      ? clampWidgetWindowBoundsByVisualArea(requestedBounds, input.visualInsets)
+      : clampWidgetWindowBounds(requestedBounds)
+
+    idleWindow.setBounds(nextBounds)
+    idleWindowPosition = { x: nextBounds.x, y: nextBounds.y }
+    return { ok: true, bounds: nextBounds }
   })
 
   ipcMain.handle('window:openStretching', () => {

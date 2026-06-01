@@ -5,7 +5,8 @@ import { getDB, withTransaction } from '../database/db'
 const DEFAULT_SETTINGS = {
   widget: {
     opacity: 1,
-    scale: 1
+    scale: 1,
+    flipX: false
   },
   stretching: {
     intervalMinutes: 60
@@ -20,6 +21,20 @@ function readNumberSetting(rowsByKey, key, fallback) {
   const value = Number(rowsByKey.get(key)?.value)
 
   return Number.isFinite(value) ? value : fallback
+}
+
+function readBooleanSetting(rowsByKey, key, fallback) {
+  const value = rowsByKey.get(key)?.value
+
+  if (value === '1' || value === 'true') {
+    return true
+  }
+
+  if (value === '0' || value === 'false') {
+    return false
+  }
+
+  return fallback
 }
 
 function writeSetting(database, key, value) {
@@ -54,7 +69,8 @@ function normalizeWidgetSettings(input) {
 
   return {
     opacity: clamp(opacity, 0.3, 1),
-    scale: clamp(scale, 0.7, 1.4)
+    scale: clamp(scale, 1, 1.4),
+    flipX: Boolean(input?.flipX)
   }
 }
 
@@ -80,7 +96,8 @@ export function getSettings() {
         'widget.opacity',
         DEFAULT_SETTINGS.widget.opacity
       ),
-      scale: readNumberSetting(rowsByKey, 'widget.scale', DEFAULT_SETTINGS.widget.scale)
+      scale: readNumberSetting(rowsByKey, 'widget.scale', DEFAULT_SETTINGS.widget.scale),
+      flipX: readBooleanSetting(rowsByKey, 'widget.flip_x', DEFAULT_SETTINGS.widget.flipX)
     },
     stretching: {
       intervalMinutes: readNumberSetting(
@@ -102,6 +119,7 @@ const updateWidgetSettingsTransaction = withTransaction((input) => {
 
   writeSetting(database, 'widget.opacity', widget.opacity)
   writeSetting(database, 'widget.scale', widget.scale)
+  writeSetting(database, 'widget.flip_x', widget.flipX ? '1' : '0')
 
   return getSettings()
 })

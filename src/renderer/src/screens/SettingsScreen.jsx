@@ -8,7 +8,8 @@ import { geobugiApi } from '../lib/api'
 const DEFAULT_SETTINGS = {
   widget: {
     opacity: 1,
-    scale: 1
+    scale: 1,
+    flipX: false
   },
   stretching: {
     intervalMinutes: 60
@@ -28,7 +29,8 @@ function normalizeSettings(settings) {
   return {
     widget: {
       opacity: Number(settings?.widget?.opacity ?? DEFAULT_SETTINGS.widget.opacity),
-      scale: Number(settings?.widget?.scale ?? DEFAULT_SETTINGS.widget.scale)
+      scale: Number(settings?.widget?.scale ?? DEFAULT_SETTINGS.widget.scale),
+      flipX: Boolean(settings?.widget?.flipX ?? DEFAULT_SETTINGS.widget.flipX)
     },
     stretching: {
       intervalMinutes: Number(
@@ -212,10 +214,11 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
     }))
   }
 
-  async function commitWidgetSettings() {
+  async function commitWidgetSettings(nextWidget = settings.widget) {
     const widget = {
-      opacity: clamp(settings.widget.opacity, 0.3, 1),
-      scale: clamp(settings.widget.scale, 0.7, 1.4)
+      opacity: clamp(nextWidget.opacity, 0.3, 1),
+      scale: clamp(nextWidget.scale, 1, 1.4),
+      flipX: Boolean(nextWidget.flipX)
     }
 
     setError('')
@@ -410,7 +413,7 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
                 </div>
                 <div>
                   <strong>거북이 크기</strong>
-                  <p>거북이 크기는 0.7배부터 1.4배까지 조절할 수 있어요.</p>
+                  <p>거북이 크기는 1.0배부터 1.4배까지 조절할 수 있어요.</p>
                 </div>
                 <div>
                   <strong>스트레칭 알림 주기</strong>
@@ -432,18 +435,28 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
           leftLabel="투명하게"
           rightLabel="선명하게"
           onChange={(value) => updateWidgetDraft('opacity', value)}
-          onCommit={() => void commitWidgetSettings()}
+          onCommit={(value) =>
+            void commitWidgetSettings({
+              ...settings.widget,
+              opacity: value
+            })
+          }
         />
         <SliderField
           label="거북이 크기"
-          min={0.7}
+          min={1}
           max={1.4}
           step={0.05}
           value={settings.widget.scale}
           leftLabel="작게"
           rightLabel="크게"
           onChange={(value) => updateWidgetDraft('scale', value)}
-          onCommit={() => void commitWidgetSettings()}
+          onCommit={(value) =>
+            void commitWidgetSettings({
+              ...settings.widget,
+              scale: value
+            })
+          }
         />
         <SliderField
           label="스트레칭 알림 주기"
