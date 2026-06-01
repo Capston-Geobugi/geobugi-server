@@ -6,6 +6,7 @@ function CalibrationScreen({ onBack, onStart, onPreviewStart, cvStatus, cvFrame 
   const timerRef = useRef(null)
   const [isMeasuring, setIsMeasuring] = useState(false)
   const [countdown, setCountdown] = useState(5)
+  const countdownProgress = isMeasuring ? Math.max(0, Math.min(1, countdown / 5)) : 1
 
   useEffect(() => {
     void onPreviewStart()
@@ -45,7 +46,7 @@ function CalibrationScreen({ onBack, onStart, onPreviewStart, cvStatus, cvFrame 
 
       <header className="measure-title">
         <h1>바른 자세 측정</h1>
-        <p>카메라 정면을 보고 자세를 바르게 해주세요</p>
+        <p>카메라 정면을 보고 얼굴과 어깨가 모두 화면에 나오게 촬영해주세요</p>
       </header>
 
       <section className="camera-box">
@@ -70,7 +71,12 @@ function CalibrationScreen({ onBack, onStart, onPreviewStart, cvStatus, cvFrame 
         {isMeasuring ? '측정 중입니다' : '자세 측정하기'}
       </button>
 
-      <div className={`countdown ${isMeasuring ? 'active' : ''}`}>{countdown}</div>
+      <div
+        className={`countdown ${isMeasuring ? 'active' : ''}`}
+        style={{ '--countdown-progress': `${countdownProgress * 360}deg` }}
+      >
+        {countdown}
+      </div>
       <p className="measure-help">{isMeasuring ? '초 후 측정이 완료됩니다' : cvStatus}</p>
     </main>
   )

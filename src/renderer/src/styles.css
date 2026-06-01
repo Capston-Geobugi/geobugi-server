@@ -233,7 +233,11 @@ button:disabled {
   color: #3478f6;
   background:
     radial-gradient(circle at center, #f4f7fa 52%, transparent 54%),
-    conic-gradient(#3478f6 0deg, #3478f6 270deg, #dce8ff 270deg);
+    conic-gradient(
+      #3478f6 0deg,
+      #3478f6 var(--countdown-progress, 360deg),
+      #dce8ff var(--countdown-progress, 360deg)
+    );
   font-size: 24px;
   font-weight: 900;
 }
