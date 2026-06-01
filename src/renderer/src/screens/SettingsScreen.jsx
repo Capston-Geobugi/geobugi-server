@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Check, Info, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
 
 import BottomNav from '../components/BottomNav'
 import { geobugiApi } from '../lib/api'
@@ -86,6 +86,10 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState('')
   const [error, setError] = useState('')
+  const [stretchingIntervalDraft, setStretchingIntervalDraft] = useState(
+    String(DEFAULT_SETTINGS.stretching.intervalMinutes)
+  )
+  const [stretchingIntervalError, setStretchingIntervalError] = useState('')
 
   const activeMode = useMemo(() => modes.find((mode) => mode.isActive) ?? null, [modes])
   const modeNameTooLong = newMode.name.trim().length > 30
@@ -102,7 +106,10 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
       ])
 
       setModes(Array.isArray(nextModes) ? nextModes : [])
-      setSettings(normalizeSettings(nextSettings))
+      const normalizedSettings = normalizeSettings(nextSettings)
+      setSettings(normalizedSettings)
+      setStretchingIntervalDraft(String(normalizedSettings.stretching.intervalMinutes))
+      setStretchingIntervalError('')
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : '설정을 불러오지 못했어요.')
     } finally {
@@ -114,7 +121,10 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
     void loadSettings()
 
     return geobugiApi.onSettingsChanged((nextSettings) => {
-      setSettings(normalizeSettings(nextSettings))
+      const normalizedSettings = normalizeSettings(nextSettings)
+      setSettings(normalizedSettings)
+      setStretchingIntervalDraft(String(normalizedSettings.stretching.intervalMinutes))
+      setStretchingIntervalError('')
     })
   }, [])
 
@@ -236,16 +246,25 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
   }
 
   async function commitStretchingSettings(
-    nextIntervalMinutes = settings.stretching.intervalMinutes
+    nextIntervalMinutes = Number(stretchingIntervalDraft)
   ) {
-    const intervalMinutes = clamp(nextIntervalMinutes, 10, 240)
+    const intervalMinutes = Number(nextIntervalMinutes)
+
+    if (!Number.isFinite(intervalMinutes) || intervalMinutes < 10 || intervalMinutes > 240) {
+      setStretchingIntervalError('10분 이상 240분 이하로 입력해주세요.')
+      setStretchingIntervalDraft(String(settings.stretching.intervalMinutes))
+      return
+    }
 
     setError('')
+    setStretchingIntervalError('')
     setSavingKey('stretching')
 
     try {
       const nextSettings = await geobugiApi.updateStretchingSettings({ intervalMinutes })
-      setSettings(normalizeSettings(nextSettings))
+      const normalizedSettings = normalizeSettings(nextSettings)
+      setSettings(normalizedSettings)
+      setStretchingIntervalDraft(String(normalizedSettings.stretching.intervalMinutes))
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : '스트레칭 알림 설정을 저장하지 못했어요.'
@@ -280,31 +299,6 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
           <h2>측정 모드 선택</h2>
           <span>총 {modes.length}개</span>
           <div className="mode-card-actions">
-            <div className="info-popover-wrap">
-              <button className="mode-info-toggle" type="button" aria-label="측정 모드 설명 보기">
-                <Info size={18} />
-              </button>
-              <div className="mode-info-popover" role="tooltip">
-                <div>
-                  <strong>측정 모드</strong>
-                  <p>상황에 맞는 민감도를 저장해두고 빠르게 전환할 수 있어요.</p>
-                </div>
-                <div>
-                  <strong>민감도 범위</strong>
-                  <p>민감도는 1부터 20까지 설정할 수 있고, 숫자가 클수록 자세 변화에 민감해요.</p>
-                </div>
-                <div>
-                  <strong>모드 추가</strong>
-                  <p>플러스 버튼을 눌러 이름과 민감도를 정한 뒤 새 모드를 추가하세요.</p>
-                </div>
-                <div>
-                  <strong>모드 삭제</strong>
-                  <p>
-                    휴지통 버튼으로 직접 만든 모드를 삭제할 수 있고, 기본 모드는 삭제할 수 없어요.
-                  </p>
-                </div>
-              </div>
-            </div>
             <button
               className="mode-form-toggle"
               type="button"
@@ -397,33 +391,6 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
       <section className="settings-card settings-panel">
         <div className="settings-card-title">
           <h2>위젯 및 알림 설정</h2>
-          <div className="mode-card-actions">
-            <div className="info-popover-wrap">
-              <button
-                className="mode-info-toggle"
-                type="button"
-                aria-label="위젯 및 알림 설정 설명 보기"
-              >
-                <Info size={18} />
-              </button>
-              <div className="mode-info-popover" role="tooltip">
-                <div>
-                  <strong>투명도</strong>
-                  <p>위젯을 더 투명하거나 선명하게 조절해 화면을 가리지 않도록 설정해요.</p>
-                </div>
-                <div>
-                  <strong>거북이 크기</strong>
-                  <p>거북이 크기는 1.0배부터 1.4배까지 조절할 수 있어요.</p>
-                </div>
-                <div>
-                  <strong>스트레칭 알림 주기</strong>
-                  <p>
-                    10분부터 240분까지 설정할 수 있고, 설정한 주기마다 스트레칭 알림에 사용돼요.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <SliderField
@@ -458,24 +425,36 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
             })
           }
         />
-        <SliderField
-          label="스트레칭 알림 주기"
-          min={10}
-          max={240}
-          step={10}
-          value={settings.stretching.intervalMinutes}
-          leftLabel="10분"
-          rightLabel="4시간"
-          onChange={(value) =>
-            setSettings((currentSettings) => ({
-              ...currentSettings,
-              stretching: {
-                intervalMinutes: value
+        <label className="settings-input">
+          <span>스트레칭 알림 주기</span>
+          <input
+            type="number"
+            min={10}
+            max={240}
+            step={1}
+            value={stretchingIntervalDraft}
+            aria-label="스트레칭 알림 주기"
+            onChange={(event) => {
+              setStretchingIntervalDraft(event.target.value)
+              setStretchingIntervalError('')
+            }}
+            onBlur={() => void commitStretchingSettings()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.currentTarget.blur()
               }
-            }))
-          }
-          onCommit={(value) => void commitStretchingSettings(value)}
-        />
+            }}
+          />
+          <em
+            className={
+              stretchingIntervalError
+                ? 'settings-input-help error'
+                : 'settings-input-help'
+            }
+          >
+            {stretchingIntervalError || '10분부터 240분까지 입력할 수 있어요.'}
+          </em>
+        </label>
       </section>
 
       <BottomNav

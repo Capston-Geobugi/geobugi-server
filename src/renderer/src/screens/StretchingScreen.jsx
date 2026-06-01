@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import neckStretch1 from '../assets/neck_1.png'
 import neckStretch2 from '../assets/neck_2.png'
@@ -11,22 +11,26 @@ const neckStretchSteps = [
   {
     title: '턱 당기고 뒤로 젖히기',
     description: '엄지로 턱을 살짝 밀어 올리며 10초간 시선을 위로 향해주세요.',
+    durationSeconds: 10,
     image: neckStretch1
   },
   {
     title: '한 손으로 머리 당기기',
     description:
       '한쪽 손을 머리 위로 넘겨 귀 윗부분을 잡고 어깨가 따라오지 않게 주의하며 천천히 당겨주세요.',
+    durationSeconds: 10,
     image: neckStretch2
   },
   {
     title: '양손 깍지 끼고 머리 뒤로 넘기기',
     description: '양손을 깍지 껴서 뒤통수에 가볍게 대고 지그시 눌러 턱이 가슴에 닿도록 숙여주세요.',
+    durationSeconds: 10,
     image: neckStretch3
   },
   {
     title: '양손 머리 뒤로 깍지 끼고 당기기',
     description: '양손을 깍지 껴서 머리 뒷부분을 감싸고 턱이 가슴을 향하도록 지그시 당겨주세요.',
+    durationSeconds: 10,
     image: neckStretch4
   }
 ]
@@ -34,8 +38,33 @@ const neckStretchSteps = [
 function StretchingScreen({ onBack, onComplete }) {
   const [stepIndex, setStepIndex] = useState(0)
   const activeStep = neckStretchSteps[stepIndex]
+  const [remainingSeconds, setRemainingSeconds] = useState(activeStep.durationSeconds)
+  const [timerRunning, setTimerRunning] = useState(false)
   const isLastStep = stepIndex === neckStretchSteps.length - 1
   const progressLabel = useMemo(() => `${stepIndex + 1} / ${neckStretchSteps.length}`, [stepIndex])
+
+  useEffect(() => {
+    setRemainingSeconds(activeStep.durationSeconds)
+    setTimerRunning(false)
+  }, [activeStep])
+
+  useEffect(() => {
+    if (!timerRunning || remainingSeconds <= 0) {
+      return undefined
+    }
+
+    const timerId = window.setTimeout(() => {
+      setRemainingSeconds((currentSeconds) => Math.max(0, currentSeconds - 1))
+    }, 1000)
+
+    return () => window.clearTimeout(timerId)
+  }, [remainingSeconds, timerRunning])
+
+  useEffect(() => {
+    if (remainingSeconds === 0) {
+      setTimerRunning(false)
+    }
+  }, [remainingSeconds])
 
   function handlePrevious() {
     setStepIndex((currentIndex) => Math.max(0, currentIndex - 1))
@@ -59,6 +88,28 @@ function StretchingScreen({ onBack, onComplete }) {
           <b>긴장된 목을</b>
           <strong>천천히 풀어볼까요?</strong>
         </h2>
+        <button
+          className={remainingSeconds === 0 ? 'stretching-timer done' : 'stretching-timer'}
+          type="button"
+          onClick={() => {
+            if (remainingSeconds === 0) {
+              setRemainingSeconds(activeStep.durationSeconds)
+            }
+            setTimerRunning(true)
+          }}
+          aria-label={
+            timerRunning ? `남은 시간 ${remainingSeconds}초` : '스트레칭 타이머 시작'
+          }
+        >
+          {timerRunning || remainingSeconds === 0 ? (
+            <>
+              <strong>{remainingSeconds}</strong>
+              <span>초</span>
+            </>
+          ) : (
+            <strong>시작</strong>
+          )}
+        </button>
       </section>
 
       <section className="stretching-media">
@@ -81,7 +132,7 @@ function StretchingScreen({ onBack, onComplete }) {
       </nav>
 
       {isLastStep && (
-        <button className="primary-button fixed-action" onClick={onComplete}>
+        <button className="stretching-complete-button" onClick={onComplete}>
           스트레칭 완료
         </button>
       )}
