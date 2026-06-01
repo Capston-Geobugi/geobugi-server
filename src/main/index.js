@@ -16,6 +16,14 @@ const WIDGET_WINDOW_WIDTH_RATIO = 0.32
 const WIDGET_WINDOW_HEIGHT_RATIO = 0.38
 const WIDGET_MARGIN_RATIO = 0.012
 
+function getAppIconPath() {
+  if (is.dev) {
+    return join(process.cwd(), 'resources/icon.png')
+  }
+
+  return join(process.resourcesPath, 'resources/icon.png')
+}
+
 function getWidgetWindowBounds() {
   const { workArea } = screen.getPrimaryDisplay()
   const width = Math.round(workArea.width * WIDGET_WINDOW_WIDTH_RATIO)
@@ -152,6 +160,7 @@ function createMainWindow() {
     resizable: true,
     show: false,
     autoHideMenuBar: true,
+    icon: getAppIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -190,6 +199,7 @@ function createCalibrationWindow() {
     parent: mainWindow ?? undefined,
     show: false,
     autoHideMenuBar: true,
+    icon: getAppIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -234,6 +244,7 @@ function createIdleWindow() {
     skipTaskbar: true,
     show: false,
     autoHideMenuBar: true,
+    icon: getAppIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -326,6 +337,10 @@ function registerWindowHandlers() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(getAppIconPath())
+  }
+
   initDB()
   registerIpcHandlers({ onWidgetSettingsChanged: applyWidgetSettingsToIdleWindow })
   registerWindowHandlers()
