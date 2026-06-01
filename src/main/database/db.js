@@ -20,6 +20,7 @@ function runMigrations(database) {
     CREATE TABLE IF NOT EXISTS user_profile (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       display_name TEXT,
+      remote_user_id TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -178,6 +179,15 @@ function runMigrations(database) {
 
   if (!calibrationColumns.includes('ear_width_ratio')) {
     database.exec('ALTER TABLE calibrations ADD COLUMN ear_width_ratio REAL NOT NULL DEFAULT 0')
+  }
+
+  const userProfileColumns = database
+    .prepare("SELECT name FROM pragma_table_info('user_profile')")
+    .all()
+    .map((row) => row.name)
+
+  if (!userProfileColumns.includes('remote_user_id')) {
+    database.exec('ALTER TABLE user_profile ADD COLUMN remote_user_id TEXT')
   }
 
   const cvSampleSessionColumn = database
