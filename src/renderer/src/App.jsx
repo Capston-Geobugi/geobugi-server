@@ -308,6 +308,27 @@ function App() {
     setScreen('home')
   }
 
+  async function handleCloseIdle() {
+    await geobugiApi.stopCv()
+
+    if (window.api?.appWindow?.closeIdle) {
+      await window.api.appWindow.closeIdle()
+      return
+    }
+
+    window.close()
+  }
+
+  async function handleToggleWidgetFlip() {
+    const currentWidgetSettings = settings?.widget ?? { opacity: 1, scale: 1, flipX: false }
+    const nextSettings = await geobugiApi.updateWidgetSettings({
+      ...currentWidgetSettings,
+      flipX: !currentWidgetSettings.flipX
+    })
+
+    setSettings(nextSettings)
+  }
+
   if (!bootReady) {
     return <LoadingScreen message={bootMessage} progress={bootProgress} />
   }
@@ -321,8 +342,10 @@ function App() {
           widgetSettings={settings?.widget}
           showStretchingReminder={stretchingReminderVisible && hasCompletedPostureMeasurement}
           onPause={handlePauseMonitoring}
+          onClose={handleCloseIdle}
           onOpenHome={handleOpenHomeFromIdle}
           onOpenStretching={handleOpenStretching}
+          onToggleFlip={handleToggleWidgetFlip}
         />
       </>
     )

@@ -25,7 +25,11 @@ body {
 }
 
 body[data-screen='idle'] {
-  background: transparent;
+  background: transparent !important;
+}
+
+body[data-screen='idle'] #root {
+  background: transparent !important;
 }
 
 button {
@@ -1835,23 +1839,36 @@ button:disabled {
 
 .idle-turtle-zone {
   position: absolute;
-  right: 24px;
-  bottom: 34px;
-  width: 165px;
-  height: 226px;
-  --idle-button-size: 40px;
-  --idle-button-gap: 10px;
-  --turtle-visual-height: calc(115px * var(--widget-scale));
-  --idle-reminder-bottom: max(68px, calc(var(--turtle-visual-height) - 31px));
+  left: 50%;
+  bottom: 5%;
+  width: 84%;
+  height: 90%;
+  transform: translateX(-50%);
+  --idle-button-size: min(15vw, 15vh);
+  --idle-button-gap: min(3vw, 3vh);
+  --idle-controls-width: calc(var(--idle-button-size) + var(--idle-button-size) + var(--idle-button-gap));
+  --idle-mode-menu-width: min(52vw, 170px);
+  --rive-left: calc(50% - 29% * var(--widget-scale));
+  --rive-right: calc(50% + 29% * var(--widget-scale));
+  --idle-controls-offset: calc(var(--idle-button-gap) * 4.8);
+  --idle-controls-flipped-offset: calc(var(--idle-button-gap) * 4);
+  --idle-controls-left: calc(
+    var(--rive-right) - var(--idle-controls-width) - var(--idle-controls-offset)
+  );
+  --idle-controls-top: 6%;
 }
 
 .idle-controls {
   position: absolute;
-  right: 0;
-  bottom: var(--idle-reminder-bottom);
+  left: var(--idle-controls-left);
+  right: auto;
+  top: var(--idle-controls-top);
+  bottom: auto;
   z-index: 4;
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(2, var(--idle-button-size));
+  grid-auto-rows: var(--idle-button-size);
+  gap: var(--idle-button-gap);
   opacity: 0;
   pointer-events: none;
   transform: translateY(6px);
@@ -1860,15 +1877,39 @@ button:disabled {
     transform 140ms ease;
 }
 
-.idle-controls.with-stretching {
-  bottom: calc(var(--idle-reminder-bottom) + var(--idle-button-size) + var(--idle-button-gap));
+.idle-turtle-zone.flipped .idle-controls {
+  --idle-controls-left: calc(var(--rive-left) + var(--idle-controls-flipped-offset));
 }
 
-.idle-turtle-zone:hover .idle-controls,
-.idle-turtle-zone:focus-within .idle-controls {
+.idle-turtle-zone.controls-visible .idle-controls,
+.idle-controls:focus-within {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
+}
+
+.idle-controls.with-stretching {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.idle-controls.with-stretching button {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.idle-controls.with-stretching .idle-stretching {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.idle-turtle-zone.controls-visible .idle-controls.with-stretching {
+  pointer-events: auto;
+}
+
+.idle-turtle-zone.controls-visible .idle-controls.with-stretching button {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .idle-controls button {
@@ -1883,20 +1924,142 @@ button:disabled {
 }
 
 .idle-menu {
-  color: #62738a;
-  background: #eef3f8;
-}
-
-.idle-pause {
+  grid-column: 2;
+  grid-row: 1;
   color: #ff4b4b;
   background: #ffe2e2;
 }
 
-.idle-stretching {
+.idle-pause {
+  grid-column: 2;
+  grid-row: 2;
+  color: #3f4652;
+  background: #eef3f8;
+}
+
+.idle-mode {
+  grid-column: 1;
+  grid-row: 2;
+  color: #18bd84;
+  background: #e1fbef;
+}
+
+.idle-mode.active {
+  background: #d2f7e6;
+}
+
+.idle-mode-label {
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.idle-turtle-zone.flipped .idle-menu {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.idle-turtle-zone.flipped .idle-pause {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.idle-turtle-zone.flipped .idle-mode {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.idle-mode-menu {
   position: absolute;
-  right: 0;
-  bottom: var(--idle-reminder-bottom);
-  z-index: 3;
+  left: var(--idle-controls-left);
+  right: auto;
+  top: var(--idle-controls-top);
+  z-index: 5;
+  display: grid;
+  width: var(--idle-mode-menu-width);
+  padding: 8px;
+  gap: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: none;
+  transform: translateX(calc(-100% - var(--idle-button-gap)));
+}
+
+.idle-turtle-zone.flipped .idle-mode-menu {
+  left: min(
+    calc(var(--idle-controls-left) + var(--idle-button-size) + var(--idle-button-gap)),
+    calc(100% - var(--idle-mode-menu-width))
+  );
+  right: auto;
+  transform: none;
+}
+
+.idle-mode-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 34px;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #3f4652;
+  background: transparent;
+  cursor: pointer;
+}
+
+.idle-mode-menu button.active {
+  color: #0e8d67;
+  background: #e1fbef;
+}
+
+.idle-mode-menu span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.idle-mode-menu small {
+  flex: 0 0 auto;
+  color: #62738a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.idle-turtle-menu {
+  position: absolute;
+  z-index: 6;
+  min-width: 120px;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.idle-turtle-menu button {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #202b3d;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.idle-turtle-menu button:hover {
+  background: #eef3f8;
+}
+
+.idle-stretching {
+  grid-column: 2;
+  grid-row: 2;
   display: grid;
   place-items: center;
   width: var(--idle-button-size);
@@ -1910,13 +2073,45 @@ button:disabled {
   cursor: pointer;
 }
 
+.idle-turtle-zone.controls-visible .idle-stretching {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.idle-turtle-zone.flipped .idle-stretching {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.idle-turtle-zone.flipped.controls-visible .idle-stretching {
+  grid-column: 2;
+  grid-row: 1;
+}
+
 .idle-turtle {
   position: absolute;
-  right: 0;
+  left: 50%;
   bottom: 0;
-  width: 118px;
-  transform: translateY(calc((var(--neck-stage) - 1) * -1px)) scale(var(--widget-scale));
-  transform-origin: right bottom;
+  width: calc(58% * var(--widget-scale));
+  min-height: 34%;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transform: translate(-50%, calc((var(--neck-stage) - 1) * -0.35%));
+  transform-origin: center bottom;
+}
+
+.idle-turtle.dragging {
+  cursor: grabbing;
+}
+
+.idle-turtle-art {
+  width: 100%;
+  transform-origin: center;
+}
+
+.idle-turtle.flipped .idle-turtle-art {
+  transform: scaleX(-1);
 }
 
 .idle-turtle img {
@@ -1928,32 +2123,5 @@ button:disabled {
   width: 100% !important;
   height: 100% !important;
   display: block;
-}
-
-.idle-status {
-  position: absolute;
-  right: 24px;
-  bottom: 4px;
-  display: grid;
-  justify-items: center;
-  min-width: 110px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  color: #202b3d;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 8px 18px rgba(32, 43, 61, 0.12);
-}
-
-.idle-status strong {
-  color: #18bd84;
-  font-size: 15px;
-  line-height: 1.1;
-  font-weight: 900;
-}
-
-.idle-status span {
-  color: #62738a;
-  font-size: 11px;
-  line-height: 1.2;
-  font-weight: 800;
+  opacity: var(--widget-opacity);
 }

@@ -70,7 +70,8 @@ const mockSensitivityModes = [
 const mockSettings = {
   widget: {
     opacity: 1,
-    scale: 1
+    scale: 1,
+    flipX: false
   },
   stretching: {
     intervalMinutes: 60
@@ -267,6 +268,22 @@ export const geobugiApi = {
 
     mockSettings.widget = { ...mockSettings.widget, ...input }
     return mockSettings
+  },
+
+  async getIdleWindowBounds() {
+    if (window.api?.appWindow?.getIdleBounds) {
+      return window.api.appWindow.getIdleBounds()
+    }
+
+    return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }
+  },
+
+  async moveIdleWindow(input) {
+    if (window.api?.appWindow?.moveIdle) {
+      return window.api.appWindow.moveIdle(input)
+    }
+
+    return { ok: true }
   },
 
   async updateStretchingSettings(input) {
