@@ -1736,7 +1736,8 @@ button:disabled {
 
 .group-member-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
   gap: 12px;
   min-height: 90px;
   margin-top: 14px;
@@ -1753,6 +1754,38 @@ button:disabled {
 
 .group-member-card.empty {
   opacity: 0.55;
+}
+
+.group-rank-badge {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #4b5f78;
+  background: #eef4fa;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.group-rank-badge.gold,
+.group-rank-badge.silver,
+.group-rank-badge.bronze {
+  font-size: 27px;
+  background: transparent;
+}
+
+.group-rank-badge.gold {
+  filter: drop-shadow(0 4px 8px rgba(234, 179, 8, 0.24));
+}
+
+.group-rank-badge.silver {
+  filter: drop-shadow(0 4px 8px rgba(148, 163, 184, 0.24));
+}
+
+.group-rank-badge.bronze {
+  filter: drop-shadow(0 4px 8px rgba(180, 83, 9, 0.22));
 }
 
 .group-member-copy div {

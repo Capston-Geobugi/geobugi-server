@@ -93,14 +93,31 @@ function getMeasuredScore(member) {
   return getNullableScore(member?.average_score)
 }
 
-function RoomMemberCard({ member, currentUserId }) {
+const rankBadges = {
+  1: { label: '🥇', className: 'gold', ariaLabel: '1등' },
+  2: { label: '🥈', className: 'silver', ariaLabel: '2등' },
+  3: { label: '🥉', className: 'bronze', ariaLabel: '3등' }
+}
+
+function getMemberDisplayName(member, isMe) {
+  return member?.display_name || (isMe ? '거부기' : '친구')
+}
+
+function RoomMemberCard({ member, currentUserId, rank }) {
   const score = getMeasuredScore(member)
   const hasScore = score !== null
   const isMe = member?.user_id === currentUserId
-  const name = member?.display_name || (isMe ? '거부기' : '친구')
+  const name = getMemberDisplayName(member, isMe)
+  const rankBadge = rankBadges[rank]
 
   return (
     <article className={`group-member-card${isMe ? ' me' : ''}${!hasScore ? ' empty' : ''}`}>
+      <div
+        className={`group-rank-badge ${rankBadge?.className ?? 'number'}`}
+        aria-label={rankBadge?.ariaLabel ?? `${rank}등`}
+      >
+        {rankBadge?.label ?? rank}
+      </div>
       <div className="group-member-copy">
         <div>
           {isMe ? <span>ME</span> : null}
@@ -148,16 +165,16 @@ function SocialScreen({
   const sortedMembers = useMemo(
     () =>
       [...members].sort((left, right) => {
-        const leftIsMe = left.user_id === profile?.remoteUserId
-        const rightIsMe = right.user_id === profile?.remoteUserId
+        const leftScore = getMeasuredScore(left)
+        const rightScore = getMeasuredScore(right)
 
-        if (leftIsMe !== rightIsMe) {
-          return leftIsMe ? -1 : 1
+        if (leftScore !== null || rightScore !== null) {
+          return (rightScore ?? -1) - (leftScore ?? -1)
         }
 
-        return (
-          (getMeasuredScore(right) ?? -1) -
-          (getMeasuredScore(left) ?? -1)
+        return getMemberDisplayName(left, left.user_id === profile?.remoteUserId).localeCompare(
+          getMemberDisplayName(right, right.user_id === profile?.remoteUserId),
+          'ko-KR'
         )
       }),
     [members, profile?.remoteUserId]
@@ -315,10 +332,11 @@ function SocialScreen({
           {!detailLoading && sortedMembers.length === 0 ? (
             <p className="group-empty">아직 표시할 멤버 점수가 없어요.</p>
           ) : null}
-          {sortedMembers.map((member) => (
+          {sortedMembers.map((member, index) => (
             <RoomMemberCard
               key={member.user_id}
               member={member}
+              rank={index + 1}
               currentUserId={profile?.remoteUserId}
             />
           ))}
