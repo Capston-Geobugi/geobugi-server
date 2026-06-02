@@ -9,7 +9,16 @@ import { getScoreToneClass } from '../lib/scoreTone'
 import { useEffect} from 'react'
 
 
-function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, onSettings, neckStage }) {
+function HomeScreen({
+  hasCalibration,
+  score,
+  onMeasure,
+  onReport,
+  onSocial,
+  onStretching,
+  onSettings,
+  neckStage
+}) {
   
   const scoreLabel = typeof score === 'number' ? `${score}점` : '--'
   const hasScore = typeof score === 'number'
@@ -71,7 +80,13 @@ function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, 
         </button>
       </div>
 
-      <BottomNav onReport={onReport} onStretching={onStretching} onSettings={onSettings} />
+      <BottomNav
+        active="home"
+        onHome={() => {}}
+        onReport={onReport}
+        onSocial={onSocial}
+        onSettings={onSettings}
+      />
     </main>
   )
 }

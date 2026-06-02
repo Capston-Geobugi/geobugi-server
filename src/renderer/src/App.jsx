@@ -8,6 +8,7 @@ import IdleScreen from './screens/IdleScreen'
 import LoadingScreen from './screens/LoadingScreen'
 import ReportScreen from './screens/ReportScreen'
 import SettingsScreen from './screens/SettingsScreen'
+import SocialScreen from './screens/SocialScreen'
 import StretchingScreen from './screens/StretchingScreen'
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
   const [reportInitialView, setReportInitialView] = useState('daily')
   const [authMode, setAuthMode] = useState('signup')
   const [authNotice, setAuthNotice] = useState('')
+  const [selectedSocialRoom, setSelectedSocialRoom] = useState(null)
   const [stretchingReminderVisible, setStretchingReminderVisible] = useState(false)
   const [stretchingTimerStartedAt, setStretchingTimerStartedAt] = useState(() => Date.now())
   const stretchingIntervalRef = useRef(null)
@@ -460,9 +462,32 @@ function App() {
         onBack={() => setScreen('home')}
         onLoadDailyReport={refreshReport}
         onLoadMonthlyReport={refreshMonthlyReport}
+        onOpenHome={() => setScreen('home')}
         onOpenReport={() => setScreen('report')}
+        onOpenSocial={() => {
+          setSelectedSocialRoom(null)
+          setScreen('social')
+        }}
         initialView={reportInitialView}
-        onOpenStretching={handleOpenStretching}
+        onOpenSettings={() => setScreen('settings')}
+      />
+    )
+  }
+
+  if (screen === 'social') {
+    return (
+      <SocialScreen
+        selectedRoom={selectedSocialRoom}
+        onSelectRoom={(room) => {
+          setSelectedSocialRoom(room)
+          setScreen('social')
+        }}
+        onBackToList={() => setSelectedSocialRoom(null)}
+        onOpenHome={() => setScreen('home')}
+        onOpenReport={() => {
+          setReportInitialView('daily')
+          setScreen('report')
+        }}
         onOpenSettings={() => setScreen('settings')}
       />
     )
@@ -478,26 +503,30 @@ function App() {
     return (
       <SettingsScreen
         onBack={() => setScreen('home')}
+        onOpenHome={() => setScreen('home')}
         onOpenReport={() => {
           setReportInitialView('daily')
           setScreen('report')
         }}
-        onOpenStretching={handleOpenStretching}
+        onOpenSocial={() => {
+          setSelectedSocialRoom(null)
+          setScreen('social')
+        }}
       />
     )
   }
 
   return (
     <>
-    <HomeScreen
-      hasCalibration={Boolean(calibration)}
-      score={postureScore}
-      neckStage={cvRealtime?.neck_stage ?? 1}
-      onMeasure={async () => {
-        if (window.api?.appWindow?.openCalibration) {
-          await window.api.appWindow.openCalibration()
-          return
-        }
+      <HomeScreen
+        hasCalibration={Boolean(calibration)}
+        score={postureScore}
+        neckStage={cvRealtime?.neck_stage ?? 1}
+        onMeasure={async () => {
+          if (window.api?.appWindow?.openCalibration) {
+            await window.api.appWindow.openCalibration()
+            return
+          }
 
           setScreen('calibration')
         }}
@@ -506,6 +535,10 @@ function App() {
           setScreen('report')
         }}
         onStretching={handleOpenStretching}
+        onSocial={() => {
+          setSelectedSocialRoom(null)
+          setScreen('social')
+        }}
         onSettings={() => setScreen('settings')}
       />
     </>

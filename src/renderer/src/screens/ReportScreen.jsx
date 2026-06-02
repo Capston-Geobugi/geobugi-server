@@ -258,8 +258,9 @@ function ReportScreen({
   onLoadDailyReport,
   onLoadMonthlyReport,
   initialView = 'daily',
+  onOpenHome,
   onOpenReport,
-  onOpenStretching,
+  onOpenSocial,
   onOpenSettings
 }) {
   const [view, setView] = useState(initialView)
@@ -579,8 +580,9 @@ function ReportScreen({
 
       <BottomNav
         active="report"
+        onHome={onOpenHome}
         onReport={onOpenReport}
-        onStretching={onOpenStretching}
+        onSocial={onOpenSocial}
         onSettings={onOpenSettings}
       />
     </main>
