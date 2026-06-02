@@ -73,9 +73,29 @@ function getRoomId(room) {
   return room?.id ?? room?.room_id
 }
 
+function getNullableScore(value) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  const score = Number(value)
+  return Number.isFinite(score) ? score : null
+}
+
+function getMeasuredScore(member) {
+  const sampleCount = Number(member?.sample_count ?? 0)
+  const totalDurationSec = Number(member?.total_duration_sec ?? 0)
+
+  if (sampleCount <= 0 || totalDurationSec <= 0) {
+    return null
+  }
+
+  return getNullableScore(member?.average_score)
+}
+
 function RoomMemberCard({ member, currentUserId }) {
-  const score = Number(member?.average_score)
-  const hasScore = Number.isFinite(score)
+  const score = getMeasuredScore(member)
+  const hasScore = score !== null
   const isMe = member?.user_id === currentUserId
   const name = member?.display_name || (isMe ? '거부기' : '친구')
 
@@ -97,7 +117,7 @@ function RoomMemberCard({ member, currentUserId }) {
       <div className="group-member-score">
         <span>오늘 평균</span>
         <strong className={hasScore ? getScoreToneClass(score) : ''}>
-          {hasScore ? `${Math.round(score)}점` : '- 점'}
+          {hasScore ? `${Math.round(score)}점` : '--점'}
         </strong>
       </div>
     </article>
@@ -135,7 +155,10 @@ function SocialScreen({
           return leftIsMe ? -1 : 1
         }
 
-        return Number(right.average_score ?? -1) - Number(left.average_score ?? -1)
+        return (
+          (getMeasuredScore(right) ?? -1) -
+          (getMeasuredScore(left) ?? -1)
+        )
       }),
     [members, profile?.remoteUserId]
   )
