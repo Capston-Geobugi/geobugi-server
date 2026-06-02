@@ -78,7 +78,7 @@ function SliderField({
   )
 }
 
-function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
+function SettingsScreen({ onBack, onOpenHome, onOpenReport, onOpenSocial }) {
   const [modes, setModes] = useState([])
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [newMode, setNewMode] = useState(EMPTY_MODE)
@@ -459,8 +459,9 @@ function SettingsScreen({ onBack, onOpenReport, onOpenStretching }) {
 
       <BottomNav
         active="settings"
+        onHome={onOpenHome}
         onReport={onOpenReport}
-        onStretching={onOpenStretching}
+        onSocial={onOpenSocial}
         onSettings={() => {}}
       />
     </main>

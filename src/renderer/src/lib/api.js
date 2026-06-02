@@ -148,6 +148,26 @@ async function getSupabaseClientIfConfigured() {
   }
 }
 
+async function getAuthenticatedSupabase() {
+  const supabase = await getSupabaseClientIfConfigured()
+
+  if (!supabase) {
+    throw new Error('Supabase 환경변수가 설정되어 있지 않아요.')
+  }
+
+  const { data, error } = await supabase.auth.getSession()
+
+  if (error) {
+    throw error
+  }
+
+  if (!data?.session?.user) {
+    throw new Error('로그인이 필요해요.')
+  }
+
+  return supabase
+}
+
 export const geobugiApi = {
   async getProfile() {
     if (window.api?.profile?.get) {
@@ -244,6 +264,60 @@ export const geobugiApi = {
     }
 
     return data
+  },
+
+  async createRoom({ name }) {
+    const supabase = await getAuthenticatedSupabase()
+    const { data, error } = await supabase.rpc('create_room', {
+      room_name: String(name ?? '').trim()
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data?.[0] ?? null
+  },
+
+  async joinRoom({ inviteCode }) {
+    const supabase = await getAuthenticatedSupabase()
+    const { data, error } = await supabase.rpc('join_room', {
+      room_invite_code: String(inviteCode ?? '').trim()
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data?.[0] ?? null
+  },
+
+  async getMyRooms({ date } = {}) {
+    const supabase = await getAuthenticatedSupabase()
+    const targetDate = date ?? toLocalIsoDate()
+    const { data, error } = await supabase.rpc('get_my_rooms', {
+      target_score_date: targetDate
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data ?? []
+  },
+
+  async getRoomDailyScores({ roomId, date } = {}) {
+    const supabase = await getAuthenticatedSupabase()
+    const { data, error } = await supabase.rpc('get_room_daily_scores', {
+      target_room_id: roomId,
+      target_score_date: date ?? toLocalIsoDate()
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data ?? []
   },
 
   async getDailyReport(input = {}) {

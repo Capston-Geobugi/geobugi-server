@@ -1,20 +1,30 @@
 /* eslint-disable react/prop-types */
-import { BarChart3, Dumbbell, Settings } from 'lucide-react'
+import { CalendarDays, Home, Settings, UsersRound } from 'lucide-react'
 
-function BottomNav({ active, onReport, onStretching, onSettings }) {
+function BottomNav({ active, onHome, onReport, onSocial, onSettings }) {
   return (
     <nav className="bottom-nav" aria-label="하단 메뉴">
+      <button
+        className={active === 'home' ? 'active' : ''}
+        type="button"
+        onClick={onHome}
+        disabled={!onHome}
+      >
+        <Home size={25} />
+        <span>홈</span>
+      </button>
       <button className={active === 'report' ? 'active' : ''} type="button" onClick={onReport}>
-        <BarChart3 size={25} />
+        <CalendarDays size={25} />
         <span>리포트</span>
       </button>
       <button
-        className={active === 'stretching' ? 'active' : ''}
+        className={active === 'social' ? 'active' : ''}
         type="button"
-        onClick={onStretching}
+        onClick={onSocial}
+        disabled={!onSocial}
       >
-        <Dumbbell size={25} />
-        <span>거부기 타임</span>
+        <UsersRound size={25} />
+        <span>소셜</span>
       </button>
       <button
         className={active === 'settings' ? 'active' : ''}
