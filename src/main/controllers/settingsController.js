@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron'
 
 import { getDB, withTransaction } from '../database/db'
+import { getCurrentRemoteUserId } from './profileController'
 
 const DEFAULT_SETTINGS = {
   widget: {
@@ -51,6 +52,10 @@ function writeSetting(database, key, value) {
     .run(key, String(value))
 }
 
+function getScopedSettingKey(key, remoteUserId = getCurrentRemoteUserId()) {
+  return remoteUserId ? `user.${remoteUserId}.${key}` : key
+}
+
 function notifySettingsChanged(settings) {
   BrowserWindow.getAllWindows().forEach((window) => {
     if (!window.isDestroyed()) {
@@ -86,22 +91,26 @@ function normalizeStretchingInterval(value) {
 
 export function getSettings() {
   const database = getDB()
+  const remoteUserId = getCurrentRemoteUserId()
   const rows = database.prepare('SELECT key, value FROM app_settings').all()
   const rowsByKey = new Map(rows.map((row) => [row.key, row]))
 
+  function readUserNumberSetting(key, fallback) {
+    return readNumberSetting(rowsByKey, getScopedSettingKey(key, remoteUserId), fallback)
+  }
+
+  function readUserBooleanSetting(key, fallback) {
+    return readBooleanSetting(rowsByKey, getScopedSettingKey(key, remoteUserId), fallback)
+  }
+
   return {
     widget: {
-      opacity: readNumberSetting(
-        rowsByKey,
-        'widget.opacity',
-        DEFAULT_SETTINGS.widget.opacity
-      ),
-      scale: readNumberSetting(rowsByKey, 'widget.scale', DEFAULT_SETTINGS.widget.scale),
-      flipX: readBooleanSetting(rowsByKey, 'widget.flip_x', DEFAULT_SETTINGS.widget.flipX)
+      opacity: readUserNumberSetting('widget.opacity', DEFAULT_SETTINGS.widget.opacity),
+      scale: readUserNumberSetting('widget.scale', DEFAULT_SETTINGS.widget.scale),
+      flipX: readUserBooleanSetting('widget.flip_x', DEFAULT_SETTINGS.widget.flipX)
     },
     stretching: {
-      intervalMinutes: readNumberSetting(
-        rowsByKey,
+      intervalMinutes: readUserNumberSetting(
         'stretching.interval_minutes',
         DEFAULT_SETTINGS.stretching.intervalMinutes
       )
@@ -117,9 +126,9 @@ const updateWidgetSettingsTransaction = withTransaction((input) => {
   const database = getDB()
   const widget = normalizeWidgetSettings(input)
 
-  writeSetting(database, 'widget.opacity', widget.opacity)
-  writeSetting(database, 'widget.scale', widget.scale)
-  writeSetting(database, 'widget.flip_x', widget.flipX ? '1' : '0')
+  writeSetting(database, getScopedSettingKey('widget.opacity'), widget.opacity)
+  writeSetting(database, getScopedSettingKey('widget.scale'), widget.scale)
+  writeSetting(database, getScopedSettingKey('widget.flip_x'), widget.flipX ? '1' : '0')
 
   return getSettings()
 })
@@ -135,7 +144,7 @@ const updateStretchingSettingsTransaction = withTransaction((input) => {
   const database = getDB()
   const intervalMinutes = normalizeStretchingInterval(input?.intervalMinutes)
 
-  writeSetting(database, 'stretching.interval_minutes', intervalMinutes)
+  writeSetting(database, getScopedSettingKey('stretching.interval_minutes'), intervalMinutes)
 
   return getSettings()
 })

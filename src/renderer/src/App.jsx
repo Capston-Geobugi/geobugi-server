@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { geobugiApi } from './lib/api'
+import AuthScreen from './screens/AuthScreen'
 import CalibrationScreen from './screens/CalibrationScreen'
 import HomeScreen from './screens/HomeScreen'
 import IdleScreen from './screens/IdleScreen'
@@ -12,9 +13,10 @@ import StretchingScreen from './screens/StretchingScreen'
 function App() {
   const initialScreen = new URLSearchParams(window.location.search).get('screen') || 'home'
   const isCalibrationWindow = initialScreen === 'calibration'
-  const shouldPrepareCvOnBoot = initialScreen === 'home'
+  const usesAuthGate = ['home', 'login', 'signup'].includes(initialScreen)
+  const shouldPrepareCvOnBoot = usesAuthGate
   const [screen, setScreen] = useState(initialScreen)
-  const [bootReady, setBootReady] = useState(!shouldPrepareCvOnBoot)
+  const [bootReady, setBootReady] = useState(!usesAuthGate)
   const [bootMessage, setBootMessage] = useState('앱 설정을 불러오고 있어요')
   const [bootProgress, setBootProgress] = useState(shouldPrepareCvOnBoot ? 8 : 100)
   const [calibration, setCalibration] = useState(null)
@@ -27,9 +29,12 @@ function App() {
   const [cvRealtime, setCvRealtime] = useState(null)
   const [paused, setPaused] = useState(false)
   const [reportInitialView, setReportInitialView] = useState('daily')
+  const [authMode, setAuthMode] = useState('signup')
+  const [authNotice, setAuthNotice] = useState('')
   const [stretchingReminderVisible, setStretchingReminderVisible] = useState(false)
   const [stretchingTimerStartedAt, setStretchingTimerStartedAt] = useState(() => Date.now())
   const stretchingIntervalRef = useRef(null)
+  const postureScoreSyncEnabledRef = useRef(false)
   const stretchingIntervalMinutes = Number(settings?.stretching?.intervalMinutes ?? 60)
   const hasCompletedPostureMeasurement = Boolean(calibration)
 
@@ -48,6 +53,13 @@ function App() {
   const refreshReport = useCallback(async (input = {}) => {
     const daily = await geobugiApi.getDailyReport(input)
     setReport(daily)
+
+    if (postureScoreSyncEnabledRef.current) {
+      void geobugiApi.syncDailyPostureScore(daily).catch((error) => {
+        console.warn('Failed to sync daily posture score to Supabase:', error)
+      })
+    }
+
     return daily
   }, [])
 
@@ -56,6 +68,19 @@ function App() {
     setMonthlyReport(monthly)
     return monthly
   }, [])
+
+  const refreshUserScopedState = useCallback(async () => {
+    const [activeCalibration, appSettings] = await Promise.all([
+      geobugiApi.getActiveCalibration(),
+      geobugiApi.getSettings(),
+      refreshReport(),
+      refreshMonthlyReport()
+    ])
+
+    setCalibration(activeCalibration)
+    setSettings(appSettings)
+    stretchingIntervalRef.current = Number(appSettings?.stretching?.intervalMinutes ?? 60)
+  }, [refreshMonthlyReport, refreshReport])
 
   const restartStretchingTimer = useCallback(() => {
     setStretchingReminderVisible(false)
@@ -118,10 +143,26 @@ function App() {
   )
 
   useEffect(() => {
-    queueMicrotask(() => {
-      void bootstrapServerState()
+    queueMicrotask(async () => {
+      if (!usesAuthGate) {
+        await bootstrapServerState()
+        return
+      }
+
+      await bootstrapServerState()
+      setBootMessage('계정 정보를 확인하고 있어요')
+
+      try {
+        const profile = await geobugiApi.getProfile()
+        const nextAuthMode = profile?.remoteUserId ? 'login' : 'signup'
+        setAuthMode(nextAuthMode)
+        setScreen(nextAuthMode)
+      } catch {
+        setAuthMode('signup')
+        setScreen('signup')
+      }
     })
-  }, [bootstrapServerState])
+  }, [bootstrapServerState, usesAuthGate])
 
   useEffect(() => {
     if (screen !== 'report') {
@@ -332,8 +373,44 @@ function App() {
     setSettings(nextSettings)
   }
 
+  async function handleAuthSubmit({ email, password }) {
+    if (authMode === 'login') {
+      await geobugiApi.signInWithEmail({ email, password })
+      postureScoreSyncEnabledRef.current = true
+      setCalibration(null)
+      setCvRealtime(null)
+      setReport(null)
+      setMonthlyReport(null)
+      setAuthNotice('')
+      setScreen('home')
+      void refreshUserScopedState()
+      return
+    }
+
+    await geobugiApi.signUpWithEmail({ email, password })
+    postureScoreSyncEnabledRef.current = false
+    setAuthMode('login')
+    setScreen('login')
+    setAuthNotice('회원가입이 완료됐어요. 로그인해주세요.')
+  }
+
   if (!bootReady) {
     return <LoadingScreen message={bootMessage} progress={bootProgress} />
+  }
+
+  if (screen === 'signup' || screen === 'login') {
+    return (
+      <AuthScreen
+        mode={authMode}
+        notice={authNotice}
+        onModeChange={(nextMode) => {
+          setAuthMode(nextMode)
+          setScreen(nextMode)
+          setAuthNotice('')
+        }}
+        onSubmit={handleAuthSubmit}
+      />
+    )
   }
 
   if (screen === 'idle') {

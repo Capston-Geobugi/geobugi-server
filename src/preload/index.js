@@ -28,6 +28,12 @@ const api = {
     getMonthly: (input) => electronAPI.ipcRenderer.invoke('report:getMonthly', input),
     getWeekly: (input) => electronAPI.ipcRenderer.invoke('report:getWeekly', input)
   },
+  profile: {
+    get: () => electronAPI.ipcRenderer.invoke('profile:get'),
+    update: (input) => electronAPI.ipcRenderer.invoke('profile:update', input),
+    linkRemoteUser: (input) => electronAPI.ipcRenderer.invoke('profile:linkRemoteUser', input),
+    unlinkRemoteUser: () => electronAPI.ipcRenderer.invoke('profile:unlinkRemoteUser')
+  },
   appWindow: {
     openCalibration: () => electronAPI.ipcRenderer.invoke('window:openCalibration'),
     completeCalibration: () => electronAPI.ipcRenderer.invoke('window:completeCalibration'),

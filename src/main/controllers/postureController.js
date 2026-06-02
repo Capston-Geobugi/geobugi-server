@@ -1,4 +1,5 @@
 import { getDB } from '../database/db'
+import { getCurrentRemoteUserId } from './profileController'
 
 let currentSessionId = null
 
@@ -9,6 +10,7 @@ function mapSession(row) {
 
   return {
     id: row.id,
+    remoteUserId: row.remote_user_id,
     calibrationId: row.calibration_id,
     startedAt: row.started_at,
     endedAt: row.ended_at,
@@ -37,15 +39,16 @@ function mapPostureEvent(row) {
 
 export function startSession({ calibrationId = null, startedAt } = {}) {
   const database = getDB()
+  const remoteUserId = getCurrentRemoteUserId()
   const normalizedStartedAt = startedAt ?? new Date().toISOString()
   const result = database
     .prepare(
       `
-        INSERT INTO posture_sessions (calibration_id, started_at)
-        VALUES (?, ?)
+        INSERT INTO posture_sessions (remote_user_id, calibration_id, started_at)
+        VALUES (?, ?, ?)
       `
     )
-    .run(calibrationId, normalizedStartedAt)
+    .run(remoteUserId, calibrationId, normalizedStartedAt)
 
   currentSessionId = Number(result.lastInsertRowid)
 

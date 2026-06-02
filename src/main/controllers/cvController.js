@@ -4,6 +4,7 @@ import { existsSync } from 'fs'
 import { dirname, join } from 'path'
 
 import { getDB } from '../database/db'
+import { getCurrentRemoteUserId } from './profileController'
 
 let cvProcess = null
 let stdoutBuffer = ''
@@ -74,14 +75,21 @@ function persistCvReport(report) {
   }
 
   const database = getDB()
+  const activeSession = activeSessionId
+    ? database
+        .prepare('SELECT remote_user_id FROM posture_sessions WHERE id = ?')
+        .get(activeSessionId)
+    : null
+  const remoteUserId = activeSession?.remote_user_id ?? getCurrentRemoteUserId()
   const insertSample = database.prepare(
     `
       INSERT INTO cv_posture_samples (
         session_id,
+        remote_user_id,
         measured_at,
         rep_value,
         raw_payload
-      ) VALUES (?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?)
     `
   )
   const insertSamples = database.transaction((samples) => {
@@ -95,6 +103,7 @@ function persistCvReport(report) {
 
       insertSample.run(
         activeSessionId,
+        remoteUserId,
         normalizeTimestamp(sample.timestamp),
         repValue,
         JSON.stringify(sample)
@@ -239,34 +248,48 @@ function waitForCvPause(timeoutMs = 5000) {
 }
 
 function getSavedCalibrationBaseline() {
+  const remoteUserId = getCurrentRemoteUserId()
+
+  if (!remoteUserId) {
+    return null
+  }
+
   const row = getDB()
     .prepare(
       `
         SELECT neck_forward_offset
         FROM calibrations
-        WHERE is_active = 1
+        WHERE remote_user_id = ?
+          AND is_active = 1
         ORDER BY created_at DESC, id DESC
         LIMIT 1
       `
     )
-    .get()
+    .get(remoteUserId)
   const baseline = Number(row?.neck_forward_offset)
 
   return Number.isFinite(baseline) && baseline > 0 ? baseline : null
 }
 
 function getActiveUserSensitivity() {
+  const remoteUserId = getCurrentRemoteUserId()
+
+  if (!remoteUserId) {
+    return null
+  }
+
   const row = getDB()
     .prepare(
       `
         SELECT user_sensitivity
         FROM sensitivity_modes
-        WHERE is_active = 1
+        WHERE remote_user_id = ?
+          AND is_active = 1
         ORDER BY updated_at DESC, id DESC
         LIMIT 1
       `
     )
-    .get()
+    .get(remoteUserId)
   const userSensitivity = Number(row?.user_sensitivity)
 
   return Number.isFinite(userSensitivity) ? userSensitivity : null

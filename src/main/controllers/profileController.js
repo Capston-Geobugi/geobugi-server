@@ -67,6 +67,10 @@ export function getProfile() {
   return mapProfile(row)
 }
 
+export function getCurrentRemoteUserId() {
+  return getProfile()?.remoteUserId ?? null
+}
+
 const updateProfileTransaction = withTransaction((input) => {
   const database = getDB()
   const displayName = normalizeDisplayName(input?.displayName)

@@ -27,6 +27,7 @@ function runMigrations(database) {
 
     CREATE TABLE IF NOT EXISTS calibrations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      remote_user_id TEXT,
       shoulder_slope REAL NOT NULL,
       neck_forward_offset REAL NOT NULL,
       ear_width_ratio REAL NOT NULL DEFAULT 0,
@@ -40,6 +41,7 @@ function runMigrations(database) {
 
     CREATE TABLE IF NOT EXISTS posture_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      remote_user_id TEXT,
       calibration_id INTEGER,
       started_at TEXT NOT NULL,
       ended_at TEXT,
@@ -68,6 +70,7 @@ function runMigrations(database) {
     CREATE TABLE IF NOT EXISTS cv_posture_samples (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id INTEGER,
+      remote_user_id TEXT,
       measured_at TEXT NOT NULL,
       rep_value REAL NOT NULL,
       raw_payload TEXT NOT NULL,
@@ -78,6 +81,7 @@ function runMigrations(database) {
     CREATE TABLE IF NOT EXISTS stretching_missions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id INTEGER,
+      remote_user_id TEXT,
       mission_type TEXT NOT NULL,
       reason TEXT NOT NULL,
       started_at TEXT NOT NULL,
@@ -89,6 +93,7 @@ function runMigrations(database) {
 
     CREATE TABLE IF NOT EXISTS sensitivity_modes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      remote_user_id TEXT,
       name TEXT NOT NULL,
       user_sensitivity INTEGER NOT NULL CHECK (user_sensitivity BETWEEN 1 AND 20),
       is_active INTEGER NOT NULL DEFAULT 0,
@@ -115,9 +120,6 @@ function runMigrations(database) {
       ON cv_posture_samples(measured_at);
     CREATE INDEX IF NOT EXISTS idx_stretching_missions_started_at
       ON stretching_missions(started_at);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_sensitivity_modes_active
-      ON sensitivity_modes(is_active)
-      WHERE is_active = 1;
   `)
 
   const sensitivityModeCount = database
@@ -182,6 +184,10 @@ function runMigrations(database) {
     database.exec('ALTER TABLE calibrations ADD COLUMN ear_width_ratio REAL NOT NULL DEFAULT 0')
   }
 
+  if (!calibrationColumns.includes('remote_user_id')) {
+    database.exec('ALTER TABLE calibrations ADD COLUMN remote_user_id TEXT')
+  }
+
   const userProfileColumns = database
     .prepare("SELECT name FROM pragma_table_info('user_profile')")
     .all()
@@ -189,6 +195,42 @@ function runMigrations(database) {
 
   if (!userProfileColumns.includes('remote_user_id')) {
     database.exec('ALTER TABLE user_profile ADD COLUMN remote_user_id TEXT')
+  }
+
+  const postureSessionColumns = database
+    .prepare("SELECT name FROM pragma_table_info('posture_sessions')")
+    .all()
+    .map((row) => row.name)
+
+  if (!postureSessionColumns.includes('remote_user_id')) {
+    database.exec('ALTER TABLE posture_sessions ADD COLUMN remote_user_id TEXT')
+  }
+
+  const stretchingMissionColumns = database
+    .prepare("SELECT name FROM pragma_table_info('stretching_missions')")
+    .all()
+    .map((row) => row.name)
+
+  if (!stretchingMissionColumns.includes('remote_user_id')) {
+    database.exec('ALTER TABLE stretching_missions ADD COLUMN remote_user_id TEXT')
+  }
+
+  const cvSampleColumns = database
+    .prepare("SELECT name FROM pragma_table_info('cv_posture_samples')")
+    .all()
+    .map((row) => row.name)
+
+  if (!cvSampleColumns.includes('remote_user_id')) {
+    database.exec('ALTER TABLE cv_posture_samples ADD COLUMN remote_user_id TEXT')
+  }
+
+  const sensitivityModeColumns = database
+    .prepare("SELECT name FROM pragma_table_info('sensitivity_modes')")
+    .all()
+    .map((row) => row.name)
+
+  if (!sensitivityModeColumns.includes('remote_user_id')) {
+    database.exec('ALTER TABLE sensitivity_modes ADD COLUMN remote_user_id TEXT')
   }
 
   const cvSampleSessionColumn = database
@@ -203,6 +245,7 @@ function runMigrations(database) {
       CREATE TABLE cv_posture_samples (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id INTEGER,
+        remote_user_id TEXT,
         measured_at TEXT NOT NULL,
         rep_value REAL NOT NULL,
         raw_payload TEXT NOT NULL,
@@ -213,6 +256,7 @@ function runMigrations(database) {
       INSERT INTO cv_posture_samples (
         id,
         session_id,
+        remote_user_id,
         measured_at,
         rep_value,
         raw_payload,
@@ -221,6 +265,7 @@ function runMigrations(database) {
       SELECT
         id,
         session_id,
+        NULL,
         measured_at,
         rep_value,
         raw_payload,
@@ -235,8 +280,27 @@ function runMigrations(database) {
         ON cv_posture_samples(session_id);
       CREATE INDEX IF NOT EXISTS idx_cv_posture_samples_measured_at
         ON cv_posture_samples(measured_at);
+      CREATE INDEX IF NOT EXISTS idx_cv_posture_samples_remote_user_id_measured_at
+        ON cv_posture_samples(remote_user_id, measured_at);
     `)
   }
+
+  database.exec(`
+    DROP INDEX IF EXISTS idx_sensitivity_modes_active;
+    CREATE INDEX IF NOT EXISTS idx_posture_sessions_remote_user_id
+      ON posture_sessions(remote_user_id);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_remote_user_id_active
+      ON calibrations(remote_user_id, is_active);
+    CREATE INDEX IF NOT EXISTS idx_cv_posture_samples_remote_user_id_measured_at
+      ON cv_posture_samples(remote_user_id, measured_at);
+    CREATE INDEX IF NOT EXISTS idx_stretching_missions_remote_user_id_started_at
+      ON stretching_missions(remote_user_id, started_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sensitivity_modes_remote_user_active
+      ON sensitivity_modes(remote_user_id, is_active)
+      WHERE is_active = 1 AND remote_user_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_sensitivity_modes_remote_user_id
+      ON sensitivity_modes(remote_user_id);
+  `)
 }
 
 export function initDB() {
