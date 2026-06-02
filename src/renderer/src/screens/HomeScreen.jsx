@@ -5,6 +5,7 @@ import useTurtleController from '../hooks/useTurtleController'
 import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
 
 import BottomNav from '../components/BottomNav'
+import { getScoreToneClass } from '../lib/scoreTone'
 import { useEffect} from 'react'
 
 
@@ -12,6 +13,7 @@ function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, 
   
   const scoreLabel = typeof score === 'number' ? `${score}점` : '--'
   const hasScore = typeof score === 'number'
+  const scoreToneClass = getScoreToneClass(score)
   const { rive, RiveComponent } = useRive({
     src: '/src/assets/turtle.riv',
     stateMachines: 'State Machine 1',
@@ -38,7 +40,7 @@ function HomeScreen({ hasCalibration, score, onMeasure, onReport, onStretching, 
         <div className="home-copy">
           <span className="chip">Geobugi</span>
           <h1>실시간 자세 점수</h1>
-          <strong>{scoreLabel}</strong>
+          <strong className={scoreToneClass}>{scoreLabel}</strong>
           <p>
             {hasScore
               ? '실시간 자세 점수가 기록되고 있어요.'

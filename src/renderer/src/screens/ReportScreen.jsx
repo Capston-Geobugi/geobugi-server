@@ -1,8 +1,9 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import BottomNav from '../components/BottomNav'
+import { getScoreToneClass } from '../lib/scoreTone'
 
 const weekdays = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -38,23 +39,26 @@ function addDaysToIsoDate(dateText, offset) {
 function toChartPoint(item, index, totalCount) {
   const left = 4
   const width = 292
+  const plotTop = 10
+  const plotBottom = 122
+  const plotHeight = plotBottom - plotTop
   const timePosition = totalCount <= 1 ? 0.5 : index / (totalCount - 1)
   const x = left + width * timePosition
   const hasData = typeof item.score === 'number'
 
   return {
     x,
-    y: hasData ? 122 - Math.min(1, Math.max(0, item.score / 100)) * 112 : 122,
+    y: hasData ? plotBottom - Math.min(1, Math.max(0, item.score / 100)) * plotHeight : plotBottom,
     hasData,
     ...item
   }
 }
 
-function createTrendPath(trend) {
+function createTrendPath(trend, measuredToneClass = '') {
   if (!Array.isArray(trend) || trend.length === 0) {
     return {
-      line: '',
-      fill: '',
+      lineSegments: [],
+      fillSegments: [],
       dataPoints: [],
       labels: [],
       hoverSlots: []
@@ -89,35 +93,82 @@ function createTrendPath(trend) {
     }
   })
   const dataPoints = points.filter((point) => point.hasData)
-  const labelStep = Math.max(1, Math.ceil((dataPoints.length - 2) / 4))
-  const labels = dataPoints.filter(
-    (point, index) =>
-      dataPoints.length <= 6 ||
-      index === 0 ||
-      index === dataPoints.length - 1 ||
-      index % labelStep === 0
-  )
+  const interpolatedPoints = points.map((point, index) => {
+    if (point.hasData) {
+      return point
+    }
+
+    const previousPoint = [...points.slice(0, index)].reverse().find((item) => item.hasData)
+    const nextPoint = points.slice(index + 1).find((item) => item.hasData)
+
+    if (!previousPoint || !nextPoint) {
+      return point
+    }
+
+    const progress = (point.x - previousPoint.x) / (nextPoint.x - previousPoint.x)
+
+    return {
+      ...point,
+      y: previousPoint.y + (nextPoint.y - previousPoint.y) * progress
+    }
+  })
+  const labels =
+    dataPoints.length <= 4
+      ? dataPoints
+      : [
+          dataPoints[0],
+          dataPoints[Math.floor((dataPoints.length - 1) / 3)],
+          dataPoints[Math.floor(((dataPoints.length - 1) * 2) / 3)],
+          dataPoints[dataPoints.length - 1]
+        ]
 
   if (dataPoints.length === 1) {
     return {
-      line: '',
-      fill: '',
+      lineSegments: [],
+      fillSegments: [],
       dataPoints,
       labels,
-      hoverSlots: points
+      hoverSlots: interpolatedPoints
     }
   }
 
-  const line = `M${dataPoints.map((point) => `${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' L')}`
-  const firstPoint = dataPoints[0]
-  const lastPoint = dataPoints[dataPoints.length - 1]
+  const segments = interpolatedPoints.slice(1).flatMap((point, index) => {
+    const previousPoint = interpolatedPoints[index]
+    const x1 = previousPoint.x.toFixed(1)
+    const y1 = previousPoint.y.toFixed(1)
+    const x2 = point.x.toFixed(1)
+    const y2 = point.y.toFixed(1)
+    const midX = ((previousPoint.x + point.x) / 2).toFixed(1)
+    const midY = ((previousPoint.y + point.y) / 2).toFixed(1)
+    const previousToneClass = previousPoint.hasData ? measuredToneClass : ''
+    const currentToneClass = point.hasData ? measuredToneClass : ''
+
+    return [
+      {
+        toneClass: previousToneClass,
+        line: `M${x1} ${y1} L${midX} ${midY}`,
+        fill: `M${x1} ${y1} L${midX} ${midY} L${midX} 122 L${x1} 122 Z`
+      },
+      {
+        toneClass: currentToneClass,
+        line: `M${midX} ${midY} L${x2} ${y2}`,
+        fill: `M${midX} ${midY} L${x2} ${y2} L${x2} 122 L${midX} 122 Z`
+      }
+    ]
+  })
 
   return {
-    line,
-    fill: `${line} L${lastPoint.x.toFixed(1)} 122 L${firstPoint.x.toFixed(1)} 122 Z`,
+    lineSegments: segments.map((segment) => ({
+      d: segment.line,
+      toneClass: segment.toneClass
+    })),
+    fillSegments: segments.map((segment) => ({
+      d: segment.fill,
+      toneClass: segment.toneClass
+    })),
     dataPoints: [],
     labels,
-    hoverSlots: points
+    hoverSlots: interpolatedPoints
   }
 }
 
@@ -159,6 +210,10 @@ function createHourlyTrend(trend) {
       repValue: Number((bucket.repValueTotal / bucket.sampleCount).toFixed(1)),
       sampleCount: bucket.sampleCount
     }))
+}
+
+function getChartToneClass(toneClass) {
+  return toneClass || 'score-tone-empty'
 }
 
 function getMonthCells(year, month) {
@@ -215,6 +270,8 @@ function ReportScreen({
   const todayLocalDate = toLocalIsoDate()
   const selectedDailyDate = report?.date ?? todayLocalDate
   const canMoveToNextDailyDate = selectedDailyDate < todayLocalDate
+  const previousScoreLabel = selectedDailyDate === todayLocalDate ? '어제' : '전날'
+  const currentScoreLabel = selectedDailyDate === todayLocalDate ? '오늘' : '선택일'
 
   useEffect(() => {
     setView(initialView)
@@ -231,17 +288,30 @@ function ReportScreen({
   const hasDailySamples = Number(report?.cvStats?.sampleCount ?? 0) > 0
   const dailyScore = hasDailySamples ? report?.cvStats?.averageScore : null
   const scoreLabel = typeof dailyScore === 'number' ? `${Math.round(dailyScore)}점` : '--'
+  const dailyScoreToneClass = getScoreToneClass(dailyScore)
   const yesterdayScore = report?.averageScoreComparison?.yesterday?.averageScore
   const yesterdayLabel =
     typeof yesterdayScore === 'number' ? `${Math.round(yesterdayScore)}점` : '--'
+  const yesterdayScoreToneClass = getScoreToneClass(yesterdayScore)
   const scoreDiff = report?.averageScoreComparison?.diff
   const scoreDeltaLabel =
     typeof scoreDiff === 'number'
       ? `${scoreDiff >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(scoreDiff))}점`
       : '변화 없음'
+  const stretchingCompletedCount = Math.max(0, Number(report?.stretchingCompletedCount ?? 0))
+  const stretchingCompletedLabel = Number.isFinite(stretchingCompletedCount)
+    ? `${stretchingCompletedCount}회`
+    : '0회'
   const displayTrend = useMemo(() => createHourlyTrend(report?.scoreTrend), [report?.scoreTrend])
-  const trendPath = useMemo(() => createTrendPath(displayTrend), [displayTrend])
+  const trendPath = useMemo(
+    () => createTrendPath(displayTrend, dailyScoreToneClass),
+    [dailyScoreToneClass, displayTrend]
+  )
   const reportDates = useMemo(() => new Set(monthlyReport?.reportDates ?? []), [monthlyReport])
+  const monthlyDaysByDate = useMemo(
+    () => new Map((monthlyReport?.days ?? []).map((day) => [day.date, day])),
+    [monthlyReport]
+  )
   const monthCells = useMemo(
     () => getMonthCells(visibleYear, visibleMonthNumber),
     [visibleMonthNumber, visibleYear]
@@ -333,17 +403,44 @@ function ReportScreen({
               <div className="chart-area">
                 <svg className="chart" viewBox="0 0 300 130" aria-hidden="true">
                   <defs>
-                    <linearGradient id="dailyChartFill" x1="0" x2="0" y1="0" y2="1">
+                    <linearGradient id="dailyChartFillGood" x1="0" x2="0" y1="0" y2="1">
                       <stop offset="0%" stopColor="#18bd84" stopOpacity="0.22" />
                       <stop offset="100%" stopColor="#18bd84" stopOpacity="0" />
                     </linearGradient>
+                    <linearGradient id="dailyChartFillWarning" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.24" />
+                      <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                    </linearGradient>
+                    <linearGradient id="dailyChartFillDanger" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity="0.22" />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+                    </linearGradient>
+                    <linearGradient id="dailyChartFillEmpty" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#cbd5e1" stopOpacity="0.24" />
+                      <stop offset="100%" stopColor="#cbd5e1" stopOpacity="0" />
+                    </linearGradient>
                   </defs>
-                  {trendPath.fill ? <path className="chart-fill" d={trendPath.fill} /> : null}
-                  {trendPath.line ? <path className="chart-line" d={trendPath.line} /> : null}
+                  <line className="chart-grid-line" x1="0" x2="300" y1="10" y2="10" />
+                  <line className="chart-grid-line" x1="0" x2="300" y1="66" y2="66" />
+                  <line className="chart-grid-line" x1="0" x2="300" y1="122" y2="122" />
+                  {trendPath.fillSegments.map((segment, index) => (
+                    <path
+                      key={`fill-${index}`}
+                      className={`chart-fill ${getChartToneClass(segment.toneClass)}`}
+                      d={segment.d}
+                    />
+                  ))}
+                  {trendPath.lineSegments.map((segment, index) => (
+                    <path
+                      key={`line-${index}`}
+                      className={`chart-line ${getChartToneClass(segment.toneClass)}`}
+                      d={segment.d}
+                    />
+                  ))}
                   {trendPath.dataPoints.map((point, index) => (
                     <circle
                       key={`point-${index}`}
-                      className="chart-point"
+                      className={`chart-point ${dailyScoreToneClass}`}
                       cx={point.x}
                       cy={point.y}
                       r="4"
@@ -382,7 +479,9 @@ function ReportScreen({
                 </svg>
                 {hoveredChartSlot ? (
                   <div
-                    className={`chart-tooltip ${hoveredChartSlot.hasData ? '' : 'empty'}`}
+                    className={`chart-tooltip ${
+                      hoveredChartSlot.hasData ? getScoreToneClass(hoveredChartSlot.score) : 'empty'
+                    }`}
                     style={{
                       left: `${Math.min(92, Math.max(8, (hoveredChartSlot.x / 300) * 100))}%`,
                       top: `${Math.max(10, (hoveredChartSlot.y / 130) * 100)}%`
@@ -404,17 +503,28 @@ function ReportScreen({
             <h2>평균 자세 점수 비교</h2>
             <div className="score-row">
               <div>
-                <span>어제</span>
-                <b>{yesterdayLabel}</b>
+                <span>{previousScoreLabel}</span>
+                <b className={yesterdayScoreToneClass}>{yesterdayLabel}</b>
               </div>
               <em className={typeof scoreDiff === 'number' && scoreDiff < 0 ? 'down' : ''}>
                 {scoreDeltaLabel}
               </em>
               <div>
-                <span>오늘</span>
-                <strong>{scoreLabel}</strong>
+                <span>{currentScoreLabel}</span>
+                <strong className={dailyScoreToneClass}>{scoreLabel}</strong>
               </div>
             </div>
+          </section>
+
+          <section className="report-card stretching-count-card">
+            <div className="stretching-count-icon" aria-hidden="true">
+              <CheckCircle2 size={24} />
+            </div>
+            <div>
+              <h2>스트레칭 완료 횟수</h2>
+              <span>오늘 완료한 스트레칭</span>
+            </div>
+            <strong>{stretchingCompletedLabel}</strong>
           </section>
         </>
       ) : (
@@ -440,6 +550,8 @@ function ReportScreen({
             <div className="calendar-grid">
               {monthCells.map((cell, index) => {
                 const hasReport = cell.date ? reportDates.has(cell.date) : false
+                const monthlyDay = cell.date ? monthlyDaysByDate.get(cell.date) : null
+                const monthlyScoreToneClass = getScoreToneClass(monthlyDay?.averageScore)
 
                 return (
                   <button
@@ -454,7 +566,9 @@ function ReportScreen({
                     }}
                   >
                     <span>{cell.day}</span>
-                    {hasReport ? <i aria-label="리포트 있음" /> : null}
+                    {hasReport ? (
+                      <i className={monthlyScoreToneClass} aria-label="리포트 있음" />
+                    ) : null}
                   </button>
                 )
               })}

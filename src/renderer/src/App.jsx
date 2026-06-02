@@ -171,8 +171,11 @@ function App() {
       return undefined
     }
 
-    return window.api.appWindow.onStretchingCompleted(restartStretchingTimer)
-  }, [restartStretchingTimer])
+    return window.api.appWindow.onStretchingCompleted(() => {
+      restartStretchingTimer()
+      void refreshReport()
+    })
+  }, [refreshReport, restartStretchingTimer])
 
   useEffect(() => {
     if (!window.api?.cv?.onEvent) {

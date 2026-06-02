@@ -120,7 +120,7 @@ function createAverageScoreComparison(today, yesterday) {
   }
 }
 
-function createReportFromSamples(date, samples, yesterdaySamples = []) {
+function createReportFromSamples(date, samples, yesterdaySamples = [], stretchingSummary = {}) {
   const cvStats = createCvStats(samples)
   const totalDurationSec = cvStats.sampleCount * SAMPLE_DURATION_SEC
   const scoreRatio = cvStats.averageScore === null ? 0 : cvStats.averageScore / 100
@@ -139,8 +139,8 @@ function createReportFromSamples(date, samples, yesterdaySamples = []) {
     warningCount: 0,
     badEventCount: 0,
     longestBadDurationSec: 0,
-    stretchingCompletedCount: 0,
-    stretchingSkippedCount: 0,
+    stretchingCompletedCount: stretchingSummary.completedCount ?? 0,
+    stretchingSkippedCount: stretchingSummary.skippedCount ?? 0,
     cvStats,
     scoreTrend: createScoreTrend(samples),
     averageScoreComparison: createAverageScoreComparison(todayScoreSummary, yesterdayScoreSummary),
@@ -176,14 +176,90 @@ function getDailyCvSamples(database, date) {
     .filter(Boolean)
 }
 
+function getDailyStretchingSummary(database, date) {
+  const completedRow = database
+    .prepare(
+      `
+        SELECT COUNT(*) AS count
+        FROM stretching_missions
+        WHERE status = 'completed'
+          AND completed_at IS NOT NULL
+          AND date(completed_at) = date(?)
+      `
+    )
+    .get(date)
+  const skippedRow = database
+    .prepare(
+      `
+        SELECT COUNT(*) AS count
+        FROM stretching_missions
+        WHERE status = 'skipped'
+          AND date(started_at) = date(?)
+      `
+    )
+    .get(date)
+
+  return {
+    completedCount: Number(completedRow?.count ?? 0),
+    skippedCount: Number(skippedRow?.count ?? 0)
+  }
+}
+
+function getStretchingSummariesByDate(database, startDate, endDate) {
+  const rows = database
+    .prepare(
+      `
+        SELECT
+          report_date,
+          SUM(completed_count) AS completed_count,
+          SUM(skipped_count) AS skipped_count
+        FROM (
+          SELECT
+            date(completed_at) AS report_date,
+            COUNT(*) AS completed_count,
+            0 AS skipped_count
+          FROM stretching_missions
+          WHERE status = 'completed'
+            AND completed_at IS NOT NULL
+            AND date(completed_at) BETWEEN date(?) AND date(?)
+          GROUP BY date(completed_at)
+
+          UNION ALL
+
+          SELECT
+            date(started_at) AS report_date,
+            0 AS completed_count,
+            COUNT(*) AS skipped_count
+          FROM stretching_missions
+          WHERE status = 'skipped'
+            AND date(started_at) BETWEEN date(?) AND date(?)
+          GROUP BY date(started_at)
+        )
+        GROUP BY report_date
+      `
+    )
+    .all(startDate, endDate, startDate, endDate)
+
+  return new Map(
+    rows.map((row) => [
+      row.report_date,
+      {
+        completedCount: Number(row.completed_count ?? 0),
+        skippedCount: Number(row.skipped_count ?? 0)
+      }
+    ])
+  )
+}
+
 export function getDailyReport({ date } = {}) {
   const database = getDB()
   const targetDate = date ?? toLocalIsoDate()
   const yesterdayDate = getPreviousIsoDate(targetDate)
   const samples = getDailyCvSamples(database, targetDate)
   const yesterdaySamples = getDailyCvSamples(database, yesterdayDate)
+  const stretchingSummary = getDailyStretchingSummary(database, targetDate)
 
-  return createReportFromSamples(targetDate, samples, yesterdaySamples)
+  return createReportFromSamples(targetDate, samples, yesterdaySamples, stretchingSummary)
 }
 
 export function getMonthlyReport(input = {}) {
@@ -226,6 +302,7 @@ export function getMonthlyReport(input = {}) {
 
 export function getWeeklyReport({ startDate, endDate } = {}) {
   const database = getDB()
+  const stretchingSummariesByDate = getStretchingSummariesByDate(database, startDate, endDate)
   const rows = database
     .prepare(
       `
@@ -246,6 +323,10 @@ export function getWeeklyReport({ startDate, endDate } = {}) {
   const days = rows.map((row) => {
     const averageScore = toPostureScore(row.average_rep_value)
     const totalDurationSec = row.sample_count * SAMPLE_DURATION_SEC
+    const stretchingSummary = stretchingSummariesByDate.get(row.date) ?? {
+      completedCount: 0,
+      skippedCount: 0
+    }
 
     return {
       date: row.date,
@@ -257,8 +338,8 @@ export function getWeeklyReport({ startDate, endDate } = {}) {
       },
       warningCount: 0,
       badEventCount: 0,
-      stretchingCompletedCount: 0,
-      stretchingSkippedCount: 0,
+      stretchingCompletedCount: stretchingSummary.completedCount,
+      stretchingSkippedCount: stretchingSummary.skippedCount,
       cvStats: {
         sampleCount: row.sample_count,
         averageRepValue: row.average_rep_value,
