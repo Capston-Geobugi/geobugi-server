@@ -316,6 +316,8 @@ function restoreRuntimeSettings() {
 
 export function startCvProcess() {
   ensureCvProcess()
+  restoreRuntimeSettings()
+  sendCommand({ type: 'RESUME_MONITORING' })
   return getCvStatus()
 }
 

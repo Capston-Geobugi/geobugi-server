@@ -481,6 +481,14 @@ export const geobugiApi = {
     return { ok: true }
   },
 
+  async startCvMonitoring() {
+    if (window.api?.cv?.start) {
+      return window.api.cv.start()
+    }
+
+    return { ok: true }
+  },
+
   async prepareCv() {
     if (window.api?.cv?.prepare) {
       return window.api.cv.prepare()

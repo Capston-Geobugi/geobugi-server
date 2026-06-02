@@ -3,14 +3,28 @@ import { XCircle } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 function normalizeNickname(value) {
-  return String(value ?? '').replace(/[^A-Za-z가-힣]/g, '').slice(0, 8)
+  return String(value ?? '')
+    .replace(/[^A-Za-z가-힣]/g, '')
+    .slice(0, 8)
 }
 
-function NicknameOnboardingScreen({ initialNickname = '거부기', onSubmit }) {
-  const [nickname, setNickname] = useState(() => normalizeNickname(initialNickname) || '거부기')
+function NicknameOnboardingScreen({ initialNickname = '', onSubmit }) {
+  const [nickname, setNickname] = useState(() => normalizeNickname(initialNickname))
   const [error, setError] = useState('')
+  const [isComposing, setIsComposing] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const isValid = useMemo(() => /^[A-Za-z가-힣]{2,8}$/.test(nickname), [nickname])
+
+  function handleNicknameChange(event) {
+    const nextNickname = event.target.value
+
+    if (isComposing || event.nativeEvent.isComposing) {
+      setNickname(nextNickname.slice(0, 8))
+      return
+    }
+
+    setNickname(normalizeNickname(nextNickname))
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -47,7 +61,12 @@ function NicknameOnboardingScreen({ initialNickname = '거부기', onSubmit }) {
             <input
               type="text"
               value={nickname}
-              onChange={(event) => setNickname(normalizeNickname(event.target.value))}
+              onChange={handleNicknameChange}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={(event) => {
+                setIsComposing(false)
+                setNickname(normalizeNickname(event.currentTarget.value))
+              }}
               autoFocus
             />
             {nickname ? (

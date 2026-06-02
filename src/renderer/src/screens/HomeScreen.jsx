@@ -1,83 +1,91 @@
-/* eslint-disable react/prop-types */
-import { Activity } from 'lucide-react'
+/* eslint-disable react-hooks/immutability, react/prop-types */
+import { useEffect } from 'react'
+import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
 
 import useTurtleController from '../hooks/useTurtleController'
-import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
 
 import BottomNav from '../components/BottomNav'
 import { getScoreToneClass } from '../lib/scoreTone'
-import { useEffect} from 'react'
-
 
 function HomeScreen({
   hasCalibration,
+  displayName,
   score,
+  scoreTitle = '오늘의 평균 자세 점수',
   onMeasure,
+  onStartWidget,
   onReport,
   onSocial,
-  onStretching,
   onSettings,
   neckStage
 }) {
-  
-  const scoreLabel = typeof score === 'number' ? `${score}점` : '--'
+  const greetingName = String(displayName ?? '').trim() || '거부기'
   const hasScore = typeof score === 'number'
   const scoreToneClass = getScoreToneClass(score)
+  const scoreValueLabel = hasScore ? Math.round(score) : '--'
+  const statusLabel = hasCalibration ? '기준 자세 저장 완료' : '기준 자세 측정 필요'
+  const statusMark = hasCalibration ? '✓' : '!'
   const { rive, RiveComponent } = useRive({
     src: '/src/assets/turtle.riv',
     stateMachines: 'State Machine 1',
-    autoplay: true,
+    autoplay: true
   })
-  
-  const neckInput = useStateMachineInput(
-    rive,
-    'State Machine 1',
-    'neck_step'
-  )
+
+  const neckInput = useStateMachineInput(rive, 'State Machine 1', 'neck_step')
 
   useEffect(() => {
     if (!neckInput) return
-    
+
     neckInput.value = neckStage ?? 1
   }, [neckInput, neckStage])
-  
+
   useTurtleController(rive)
 
   return (
     <main className="app-frame home-screen">
-      <section className="home-hero">
-        <div className="home-copy">
-          <span className="chip">Geobugi</span>
-          <h1>실시간 자세 점수</h1>
-          <strong className={scoreToneClass}>{scoreLabel}</strong>
-          <p>
-            {hasScore
-              ? '실시간 자세 점수가 기록되고 있어요.'
-              : hasCalibration
-                ? '실시간 자세 측정을 시작할 수 있어요.'
-                : '먼저 바른 자세를 측정해주세요.'}
-          </p>
-        </div>
-        <div className="turtle-image">
+      <div className="home-main-content">
+        <header className="home-greeting">
+          <h1>
+            <span>안녕하세요,</span>
+            <br />
+            {greetingName}
+            <span>님</span>
+          </h1>
+        </header>
+
+        <section className="home-score-summary" aria-label={scoreTitle}>
+          <span>{scoreTitle}</span>
+          <strong className={scoreToneClass}>
+            {scoreValueLabel}
+            <em>점</em>
+          </strong>
+        </section>
+
+        <div className="turtle-image" aria-hidden="true">
           <RiveComponent />
         </div>
-      </section>
 
-      <section className="home-card">
-        <Activity size={24} />
-        <div>
-          <span>측정 상태</span>
-          <strong>{hasCalibration ? '기준 자세 저장 완료' : '초기 측정 필요'}</strong>
+        <div className={`home-status-pill ${hasCalibration ? 'complete' : 'needed'}`}>
+          <span>{statusMark}</span>
+          {statusLabel}
         </div>
-      </section>
 
-      <div className="home-actions">
-        <button className="primary-button" onClick={onMeasure}>
-          자세 측정하기
-        </button>
-        <button className="secondary-button" onClick={onStretching}>
-          거부기 타임
-        </button>
+        <div className="home-actions">
+          {hasCalibration ? (
+            <>
+              <button className="primary-button" onClick={onStartWidget}>
+                거부기 위젯 시작하기
+              </button>
+              <button className="secondary-button" onClick={onMeasure}>
+                기준 자세 다시 측정하기
+              </button>
+            </>
+          ) : (
+            <button className="primary-button" onClick={onMeasure}>
+              자세 측정하기
+            </button>
+          )}
+        </div>
       </div>
 
       <BottomNav

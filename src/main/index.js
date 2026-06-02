@@ -279,6 +279,12 @@ function registerWindowHandlers() {
     return { ok: true }
   })
 
+  ipcMain.handle('window:openIdle', () => {
+    mainWindow?.hide()
+    createIdleWindow()
+    return { ok: true }
+  })
+
   ipcMain.handle('window:openHome', () => {
     mainWindow?.show()
     mainWindow?.focus()

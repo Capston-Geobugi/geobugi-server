@@ -25,10 +25,12 @@ function App() {
   const [report, setReport] = useState(null)
   const [monthlyReport, setMonthlyReport] = useState(null)
   const [settings, setSettings] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [cvStatus, setCvStatus] = useState('측정 대기 중')
   const [cvError, setCvError] = useState('')
   const [cvFrame, setCvFrame] = useState('')
   const [cvRealtime, setCvRealtime] = useState(null)
+  const [isCvMonitoring, setIsCvMonitoring] = useState(false)
   const [paused, setPaused] = useState(false)
   const [reportInitialView, setReportInitialView] = useState('daily')
   const [authMode, setAuthMode] = useState('signup')
@@ -42,9 +44,17 @@ function App() {
   const stretchingIntervalMinutes = Number(settings?.stretching?.intervalMinutes ?? 60)
   const hasCompletedPostureMeasurement = Boolean(calibration)
 
-  const postureScore = useMemo(() => {
+  const realtimePostureScore = useMemo(() => {
     if (typeof cvRealtime?.cumulative_score === 'number') {
       return Math.max(0, Math.round(100 - cvRealtime.cumulative_score))
+    }
+
+    return null
+  }, [cvRealtime])
+
+  const averagePostureScore = useMemo(() => {
+    if (typeof report?.cvStats?.averageScore === 'number') {
+      return Math.round(report.cvStats.averageScore)
     }
 
     if (report?.totalDurationSec > 0 && typeof report?.stateRatio?.good === 'number') {
@@ -52,7 +62,10 @@ function App() {
     }
 
     return null
-  }, [cvRealtime, report])
+  }, [report])
+  const isRealtimeMeasuring = isCvMonitoring && !paused
+  const postureScore = isRealtimeMeasuring ? realtimePostureScore : averagePostureScore
+  const homeScoreTitle = isRealtimeMeasuring ? '실시간 자세 점수' : '오늘의 평균 자세 점수'
 
   const refreshReport = useCallback(async (input = {}) => {
     const daily = await geobugiApi.getDailyReport(input)
@@ -74,13 +87,15 @@ function App() {
   }, [])
 
   const refreshUserScopedState = useCallback(async () => {
-    const [activeCalibration, appSettings] = await Promise.all([
+    const [nextProfile, activeCalibration, appSettings] = await Promise.all([
+      geobugiApi.getProfile(),
       geobugiApi.getActiveCalibration(),
       geobugiApi.getSettings(),
       refreshReport(),
       refreshMonthlyReport()
     ])
 
+    setProfile(nextProfile)
     setCalibration(activeCalibration)
     setSettings(appSettings)
     stretchingIntervalRef.current = Number(appSettings?.stretching?.intervalMinutes ?? 60)
@@ -94,7 +109,8 @@ function App() {
   const bootstrapServerState = useCallback(async () => {
     setBootMessage('앱 설정을 불러오고 있어요')
     setBootProgress(12)
-    const [activeCalibration, appSettings] = await Promise.all([
+    const [nextProfile, activeCalibration, appSettings] = await Promise.all([
+      geobugiApi.getProfile(),
       geobugiApi.getActiveCalibration(),
       geobugiApi.getSettings(),
       refreshReport(),
@@ -102,10 +118,8 @@ function App() {
     ])
     setBootProgress(58)
 
-    if (activeCalibration) {
-      setCalibration(activeCalibration)
-    }
-
+    setProfile(nextProfile)
+    setCalibration(activeCalibration)
     setSettings(appSettings)
     stretchingIntervalRef.current = Number(appSettings?.stretching?.intervalMinutes ?? 60)
     restartStretchingTimer()
@@ -228,11 +242,25 @@ function App() {
     }
 
     return window.api.cv.onEvent((message) => {
-      if (!isCalibrationWindow && message.type !== 'REALTIME_UPDATE') {
+      const allowedMainWindowCvEvents = ['REALTIME_UPDATE', 'STATUS', 'CAMERA_ERROR']
+
+      if (!isCalibrationWindow && !allowedMainWindowCvEvents.includes(message.type)) {
         return
       }
 
       if (message.type === 'STATUS') {
+        if (message.payload === 'PREVIEW_STARTED') {
+          setIsCvMonitoring(true)
+        }
+
+        if (
+          message.payload === 'PREVIEW_PAUSED' ||
+          (typeof message.payload === 'object' && message.payload?.running === false)
+        ) {
+          setIsCvMonitoring(false)
+          void refreshReport()
+        }
+
         setCvStatus(
           message.payload === 'CALIBRATION_STARTED' ? 'CV 측정 중' : String(message.payload)
         )
@@ -257,7 +285,7 @@ function App() {
         )
       }
     })
-  }, [handleCalibrationDone, isCalibrationWindow])
+  }, [handleCalibrationDone, isCalibrationWindow, refreshReport])
 
   useEffect(() => {
     if (!window.api?.cv?.onError) {
@@ -340,11 +368,14 @@ function App() {
     if (!paused) {
       await geobugiApi.pauseCvMonitoring()
       setPaused(true)
+      setIsCvMonitoring(false)
+      await refreshReport()
       return
     }
 
     await geobugiApi.resumeCvMonitoring()
     setPaused(false)
+    setIsCvMonitoring(true)
   }
 
   async function handleOpenHomeFromIdle() {
@@ -356,8 +387,25 @@ function App() {
     setScreen('home')
   }
 
+  async function handleStartWidget() {
+    await geobugiApi.startCvMonitoring()
+    setIsCvMonitoring(true)
+    setPaused(false)
+    restartStretchingTimer()
+
+    if (window.api?.appWindow?.openIdle) {
+      await window.api.appWindow.openIdle()
+      return
+    }
+
+    setScreen('idle')
+  }
+
   async function handleCloseIdle() {
     await geobugiApi.stopCv()
+    setIsCvMonitoring(false)
+    setCvRealtime(null)
+    await refreshReport()
 
     if (window.api?.appWindow?.closeIdle) {
       await window.api.appWindow.closeIdle()
@@ -399,6 +447,8 @@ function App() {
 
   async function handleNicknameSubmit({ displayName }) {
     await geobugiApi.updateDisplayName({ displayName })
+    const nextProfile = await geobugiApi.getProfile()
+    setProfile(nextProfile)
     setAuthMode('login')
     setScreen('login')
     setAuthNotice(
@@ -428,12 +478,7 @@ function App() {
   }
 
   if (screen === 'nickname-onboarding') {
-    return (
-      <NicknameOnboardingScreen
-        initialNickname="거부기"
-        onSubmit={handleNicknameSubmit}
-      />
-    )
+    return <NicknameOnboardingScreen onSubmit={handleNicknameSubmit} />
   }
 
   if (screen === 'idle') {
@@ -541,7 +586,9 @@ function App() {
     <>
       <HomeScreen
         hasCalibration={Boolean(calibration)}
+        displayName={profile?.displayName}
         score={postureScore}
+        scoreTitle={homeScoreTitle}
         neckStage={cvRealtime?.neck_stage ?? 1}
         onMeasure={async () => {
           if (window.api?.appWindow?.openCalibration) {
@@ -551,11 +598,11 @@ function App() {
 
           setScreen('calibration')
         }}
+        onStartWidget={handleStartWidget}
         onReport={() => {
           setReportInitialView('daily')
           setScreen('report')
         }}
-        onStretching={handleOpenStretching}
         onSocial={() => {
           setSelectedSocialRoom(null)
           setScreen('social')

@@ -37,6 +37,7 @@ const api = {
   appWindow: {
     openCalibration: () => electronAPI.ipcRenderer.invoke('window:openCalibration'),
     completeCalibration: () => electronAPI.ipcRenderer.invoke('window:completeCalibration'),
+    openIdle: () => electronAPI.ipcRenderer.invoke('window:openIdle'),
     openHome: () => electronAPI.ipcRenderer.invoke('window:openHome'),
     closeIdle: () => electronAPI.ipcRenderer.invoke('window:closeIdle'),
     getIdleBounds: () => electronAPI.ipcRenderer.invoke('window:getIdleBounds'),

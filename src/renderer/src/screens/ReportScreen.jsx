@@ -6,6 +6,19 @@ import BottomNav from '../components/BottomNav'
 import { getScoreToneClass } from '../lib/scoreTone'
 
 const weekdays = ['일', '월', '화', '수', '목', '금', '토']
+const chartLayout = {
+  left: 4,
+  width: 292,
+  plotTop: 10,
+  plotBottom: 122
+}
+const chartXAxisTicks = [
+  { label: '0:00', minuteOfDay: 0 },
+  { label: '06:00', minuteOfDay: 6 * 60 },
+  { label: '12:00', minuteOfDay: 12 * 60 },
+  { label: '18:00', minuteOfDay: 18 * 60 },
+  { label: '23:00', minuteOfDay: 23 * 60 }
+]
 
 function formatKoreanDate(dateText) {
   if (!dateText) {
@@ -19,6 +32,15 @@ function formatKoreanDate(dateText) {
     day: 'numeric',
     weekday: 'long'
   }).format(date)
+}
+
+function formatShortKoreanDate(dateText) {
+  if (!dateText) {
+    return ''
+  }
+
+  const date = new Date(`${dateText}T00:00:00`)
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`
 }
 
 function toLocalIsoDate(date = new Date()) {
@@ -36,139 +58,95 @@ function addDaysToIsoDate(dateText, offset) {
   return toLocalIsoDate(baseDate)
 }
 
-function toChartPoint(item, index, totalCount) {
-  const left = 4
-  const width = 292
-  const plotTop = 10
-  const plotBottom = 122
-  const plotHeight = plotBottom - plotTop
-  const timePosition = totalCount <= 1 ? 0.5 : index / (totalCount - 1)
-  const x = left + width * timePosition
+function getChartTimeDomain(trend) {
+  const measuredMinutes = Array.isArray(trend)
+    ? trend.map((item) => item.minuteOfDay).filter((minute) => Number.isFinite(minute))
+    : []
+  const tickMinutes = chartXAxisTicks.map((tick) => tick.minuteOfDay)
+
+  return {
+    startMinute: Math.min(...tickMinutes, ...measuredMinutes),
+    endMinute: Math.max(...tickMinutes, ...measuredMinutes)
+  }
+}
+
+function toChartX(minuteOfDay, domain) {
+  const span = Math.max(1, domain.endMinute - domain.startMinute)
+  const timePosition = (minuteOfDay - domain.startMinute) / span
+
+  return chartLayout.left + chartLayout.width * Math.min(1, Math.max(0, timePosition))
+}
+
+function toChartPoint(item, domain) {
+  const plotHeight = chartLayout.plotBottom - chartLayout.plotTop
+  const x = toChartX(item.minuteOfDay, domain)
   const hasData = typeof item.score === 'number'
 
   return {
     x,
-    y: hasData ? plotBottom - Math.min(1, Math.max(0, item.score / 100)) * plotHeight : plotBottom,
+    y: hasData
+      ? chartLayout.plotBottom - Math.min(1, Math.max(0, item.score / 100)) * plotHeight
+      : chartLayout.plotBottom,
     hasData,
     ...item
   }
 }
 
+function createXAxisLabels(domain) {
+  return chartXAxisTicks.map((tick) => ({
+    ...tick,
+    x: toChartX(tick.minuteOfDay, domain)
+  }))
+}
+
 function createTrendPath(trend, measuredToneClass = '') {
+  const domain = getChartTimeDomain(trend)
+  const labels = createXAxisLabels(domain)
+
   if (!Array.isArray(trend) || trend.length === 0) {
     return {
       lineSegments: [],
       fillSegments: [],
       dataPoints: [],
-      labels: [],
+      labels,
       hoverSlots: []
     }
   }
 
-  const trendByHour = new Map(trend.map((item) => [new Date(item.measuredAt).getHours(), item]))
-  const hours = [...trendByHour.keys()].sort((hourA, hourB) => hourA - hourB)
-  const firstHour = hours[0]
-  const lastHour = hours[hours.length - 1]
-  const slots = Array.from({ length: lastHour - firstHour + 1 }, (_, index) => {
-    const hour = firstHour + index
-    const item = trendByHour.get(hour)
+  const points = trend.map((item) => toChartPoint(item, domain))
+  const dataPoints = points.filter((point, index) => {
+    const previousPoint = points[index - 1]
+    const nextPoint = points[index + 1]
+    const connectsToPrevious = previousPoint && point.hourOfDay - previousPoint.hourOfDay === 1
+    const connectsToNext = nextPoint && nextPoint.hourOfDay - point.hourOfDay === 1
 
-    return {
-      measuredAt:
-        item?.measuredAt ??
-        `${trend[0].measuredAt.slice(0, 10)}T${String(hour).padStart(2, '0')}:00:00`,
-      score: item?.score ?? null,
-      repValue: item?.repValue ?? null,
-      sampleCount: item?.sampleCount ?? 0
-    }
+    return !(connectsToPrevious && connectsToNext)
   })
-  const points = slots.map((item, index) => {
-    const hour = new Date(item.measuredAt).getHours()
-    const point = toChartPoint(item, index, slots.length)
+  const continuousSegments = points.reduce((segments, point, index) => {
+    const previousPoint = points[index - 1]
+    const pointCommand = `L${point.x.toFixed(1)} ${point.y.toFixed(1)}`
 
-    return {
-      ...point,
-      label: `${String(hour).padStart(2, '0')}:00`,
-      labelVisible: false
-    }
-  })
-  const dataPoints = points.filter((point) => point.hasData)
-  const interpolatedPoints = points.map((point, index) => {
-    if (point.hasData) {
-      return point
+    if (!previousPoint || point.hourOfDay - previousPoint.hourOfDay !== 1) {
+      segments.push({
+        d: `M${point.x.toFixed(1)} ${point.y.toFixed(1)}`,
+        pointCount: 1,
+        toneClass: measuredToneClass
+      })
+      return segments
     }
 
-    const previousPoint = [...points.slice(0, index)].reverse().find((item) => item.hasData)
-    const nextPoint = points.slice(index + 1).find((item) => item.hasData)
-
-    if (!previousPoint || !nextPoint) {
-      return point
-    }
-
-    const progress = (point.x - previousPoint.x) / (nextPoint.x - previousPoint.x)
-
-    return {
-      ...point,
-      y: previousPoint.y + (nextPoint.y - previousPoint.y) * progress
-    }
-  })
-  const labels =
-    dataPoints.length <= 4
-      ? dataPoints
-      : [
-          dataPoints[0],
-          dataPoints[Math.floor((dataPoints.length - 1) / 3)],
-          dataPoints[Math.floor(((dataPoints.length - 1) * 2) / 3)],
-          dataPoints[dataPoints.length - 1]
-        ]
-
-  if (dataPoints.length === 1) {
-    return {
-      lineSegments: [],
-      fillSegments: [],
-      dataPoints,
-      labels,
-      hoverSlots: interpolatedPoints
-    }
-  }
-
-  const segments = interpolatedPoints.slice(1).flatMap((point, index) => {
-    const previousPoint = interpolatedPoints[index]
-    const x1 = previousPoint.x.toFixed(1)
-    const y1 = previousPoint.y.toFixed(1)
-    const x2 = point.x.toFixed(1)
-    const y2 = point.y.toFixed(1)
-    const midX = ((previousPoint.x + point.x) / 2).toFixed(1)
-    const midY = ((previousPoint.y + point.y) / 2).toFixed(1)
-    const previousToneClass = previousPoint.hasData ? measuredToneClass : ''
-    const currentToneClass = point.hasData ? measuredToneClass : ''
-
-    return [
-      {
-        toneClass: previousToneClass,
-        line: `M${x1} ${y1} L${midX} ${midY}`,
-        fill: `M${x1} ${y1} L${midX} ${midY} L${midX} 122 L${x1} 122 Z`
-      },
-      {
-        toneClass: currentToneClass,
-        line: `M${midX} ${midY} L${x2} ${y2}`,
-        fill: `M${midX} ${midY} L${x2} ${y2} L${x2} 122 L${midX} 122 Z`
-      }
-    ]
-  })
+    const currentSegment = segments[segments.length - 1]
+    currentSegment.d = `${currentSegment.d} ${pointCommand}`
+    currentSegment.pointCount += 1
+    return segments
+  }, [])
 
   return {
-    lineSegments: segments.map((segment) => ({
-      d: segment.line,
-      toneClass: segment.toneClass
-    })),
-    fillSegments: segments.map((segment) => ({
-      d: segment.fill,
-      toneClass: segment.toneClass
-    })),
-    dataPoints: [],
+    lineSegments: continuousSegments.filter((segment) => segment.pointCount > 1),
+    fillSegments: [],
+    dataPoints,
     labels,
-    hoverSlots: interpolatedPoints
+    hoverSlots: points
   }
 }
 
@@ -189,25 +167,38 @@ function createHourlyTrend(trend) {
     }
 
     const hour = measuredDate.getHours()
-    const bucket = buckets.get(hour) ?? {
-      measuredAt: `${item.measuredAt.slice(0, 10)}T${String(hour).padStart(2, '0')}:00:00`,
+    const hourKey = `${item.measuredAt.slice(0, 10)}T${String(hour).padStart(2, '0')}:00:00`
+    const bucket = buckets.get(hourKey) ?? {
+      measuredAt: hourKey,
+      hourOfDay: hour,
+      minuteOfDay: hour * 60,
       scoreTotal: 0,
       repValueTotal: 0,
+      repValueCount: 0,
       sampleCount: 0
     }
 
     bucket.scoreTotal += score
-    bucket.repValueTotal += Number.isFinite(repValue) ? repValue : 0
+    if (Number.isFinite(repValue)) {
+      bucket.repValueTotal += repValue
+      bucket.repValueCount += 1
+    }
     bucket.sampleCount += 1
-    buckets.set(hour, bucket)
+    buckets.set(hourKey, bucket)
   }
 
-  return [...buckets.entries()]
-    .sort(([hourA], [hourB]) => hourA - hourB)
-    .map(([, bucket]) => ({
+  return [...buckets.values()]
+    .sort((bucketA, bucketB) => bucketA.measuredAt.localeCompare(bucketB.measuredAt))
+    .map((bucket) => ({
       measuredAt: bucket.measuredAt,
+      hourOfDay: bucket.hourOfDay,
+      minuteOfDay: bucket.minuteOfDay,
       score: Number((bucket.scoreTotal / bucket.sampleCount).toFixed(1)),
-      repValue: Number((bucket.repValueTotal / bucket.sampleCount).toFixed(1)),
+      repValue:
+        bucket.repValueCount > 0
+          ? Number((bucket.repValueTotal / bucket.repValueCount).toFixed(1))
+          : null,
+      label: bucket.measuredAt.slice(11, 13) + ':00',
       sampleCount: bucket.sampleCount
     }))
 }
@@ -272,7 +263,8 @@ function ReportScreen({
   const selectedDailyDate = report?.date ?? todayLocalDate
   const canMoveToNextDailyDate = selectedDailyDate < todayLocalDate
   const previousScoreLabel = selectedDailyDate === todayLocalDate ? '어제' : '전날'
-  const currentScoreLabel = selectedDailyDate === todayLocalDate ? '오늘' : '선택일'
+  const currentScoreLabel =
+    selectedDailyDate === todayLocalDate ? '오늘' : formatShortKoreanDate(selectedDailyDate)
 
   useEffect(() => {
     setView(initialView)
@@ -393,7 +385,7 @@ function ReportScreen({
         <>
           <section className="report-card trend-card">
             <div className="card-heading">
-              <h2>오늘의 자세 추이</h2>
+              <h2>오늘의 시간대별 자세 추이</h2>
             </div>
             <div className="chart-shell">
               <div className="chart-y-labels" aria-hidden="true">
@@ -402,7 +394,7 @@ function ReportScreen({
                 <span>0</span>
               </div>
               <div className="chart-area">
-                <svg className="chart" viewBox="0 0 300 130" aria-hidden="true">
+                <svg className="chart" viewBox="0 0 300 146" aria-hidden="true">
                   <defs>
                     <linearGradient id="dailyChartFillGood" x1="0" x2="0" y1="0" y2="1">
                       <stop offset="0%" stopColor="#18bd84" stopOpacity="0.22" />
@@ -413,8 +405,8 @@ function ReportScreen({
                       <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
                     </linearGradient>
                     <linearGradient id="dailyChartFillDanger" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#ef4444" stopOpacity="0.22" />
-                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+                      <stop offset="0%" stopColor="#f05252" stopOpacity="0.22" />
+                      <stop offset="100%" stopColor="#f05252" stopOpacity="0" />
                     </linearGradient>
                     <linearGradient id="dailyChartFillEmpty" x1="0" x2="0" y1="0" y2="1">
                       <stop offset="0%" stopColor="#cbd5e1" stopOpacity="0.24" />
@@ -460,7 +452,7 @@ function ReportScreen({
                         x={leftEdge}
                         y="0"
                         width={rightEdge - leftEdge}
-                        height="130"
+                        height="146"
                         onMouseEnter={() => setHoveredChartSlot(slot)}
                         onMouseLeave={() => setHoveredChartSlot(null)}
                       />
@@ -471,7 +463,7 @@ function ReportScreen({
                       key={`label-${point.label}`}
                       className="chart-x-label"
                       x={point.x}
-                      y="129"
+                      y="140"
                       textAnchor="middle"
                     >
                       {point.label}
