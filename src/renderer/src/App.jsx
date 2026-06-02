@@ -6,6 +6,7 @@ import CalibrationScreen from './screens/CalibrationScreen'
 import HomeScreen from './screens/HomeScreen'
 import IdleScreen from './screens/IdleScreen'
 import LoadingScreen from './screens/LoadingScreen'
+import NicknameOnboardingScreen from './screens/NicknameOnboardingScreen'
 import ReportScreen from './screens/ReportScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import SocialScreen from './screens/SocialScreen'
@@ -32,6 +33,7 @@ function App() {
   const [reportInitialView, setReportInitialView] = useState('daily')
   const [authMode, setAuthMode] = useState('signup')
   const [authNotice, setAuthNotice] = useState('')
+  const [signupRequiresEmailConfirmation, setSignupRequiresEmailConfirmation] = useState(false)
   const [selectedSocialRoom, setSelectedSocialRoom] = useState(null)
   const [stretchingReminderVisible, setStretchingReminderVisible] = useState(false)
   const [stretchingTimerStartedAt, setStretchingTimerStartedAt] = useState(() => Date.now())
@@ -389,11 +391,21 @@ function App() {
       return
     }
 
-    await geobugiApi.signUpWithEmail({ email, password })
+    const signedUpUser = await geobugiApi.signUpWithEmail({ email, password })
+    setSignupRequiresEmailConfirmation(Boolean(signedUpUser?.requiresEmailConfirmation))
     postureScoreSyncEnabledRef.current = false
+    setScreen('nickname-onboarding')
+  }
+
+  async function handleNicknameSubmit({ displayName }) {
+    await geobugiApi.updateDisplayName({ displayName })
     setAuthMode('login')
     setScreen('login')
-    setAuthNotice('회원가입이 완료됐어요. 로그인해주세요.')
+    setAuthNotice(
+      signupRequiresEmailConfirmation
+        ? '닉네임이 저장됐어요. 이메일 인증을 완료한 뒤 로그인해주세요.'
+        : '닉네임이 저장됐어요. 로그인해주세요.'
+    )
   }
 
   if (!bootReady) {
@@ -411,6 +423,15 @@ function App() {
           setAuthNotice('')
         }}
         onSubmit={handleAuthSubmit}
+      />
+    )
+  }
+
+  if (screen === 'nickname-onboarding') {
+    return (
+      <NicknameOnboardingScreen
+        initialNickname="거부기"
+        onSubmit={handleNicknameSubmit}
       />
     )
   }

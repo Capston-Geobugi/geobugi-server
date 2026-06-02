@@ -83,6 +83,46 @@ function getDisplayNameFromEmail(email) {
   return localPart.slice(0, 30) || 'geobugi'
 }
 
+function normalizeDisplayName(displayName) {
+  return String(displayName ?? '').trim()
+}
+
+function validateNickname(displayName) {
+  const normalizedDisplayName = normalizeDisplayName(displayName)
+
+  if (!/^[A-Za-z가-힣]{2,8}$/.test(normalizedDisplayName)) {
+    throw new Error('닉네임은 한글 또는 영문 2~8자로 입력해주세요.')
+  }
+
+  return normalizedDisplayName
+}
+
+function toAuthError(error, fallbackMessage = '인증 처리에 실패했어요.') {
+  const message = String(error?.message ?? '').toLowerCase()
+
+  if (message.includes('invalid login credentials')) {
+    return new Error('이메일 또는 비밀번호가 올바르지 않아요.')
+  }
+
+  if (message.includes('email not confirmed')) {
+    return new Error('이메일 인증이 완료되지 않았어요. 인증 메일을 확인해주세요.')
+  }
+
+  if (message.includes('user already registered') || message.includes('already registered')) {
+    return new Error('이미 가입된 이메일이에요. 로그인해주세요.')
+  }
+
+  if (message.includes('password')) {
+    return new Error('비밀번호 조건을 확인해주세요.')
+  }
+
+  if (message.includes('rate limit')) {
+    return new Error('요청이 너무 많아요. 잠시 후 다시 시도해주세요.')
+  }
+
+  return new Error(error?.message || fallbackMessage)
+}
+
 function getMockRemoteUserId(email) {
   const normalizedEmail = String(email ?? 'mock@geobugi.local').trim().toLowerCase()
   let hash = 0
@@ -104,30 +144,75 @@ async function syncMockProfile({ email }) {
   return { id: remoteUserId, email, displayName, mock: true }
 }
 
-async function syncRemoteProfile({ user, email, shouldUpsertRemoteProfile = true }) {
+async function getRemoteDisplayName(supabase, userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  return normalizeDisplayName(data?.display_name)
+}
+
+async function upsertRemoteProfile({ supabase, userId, displayName }) {
+  const { error } = await supabase.from('profiles').upsert({
+    id: userId,
+    display_name: displayName
+  })
+
+  if (error) {
+    throw error
+  }
+}
+
+async function syncRemoteProfile({
+  user,
+  email,
+  displayName,
+  shouldUpsertRemoteProfile = true,
+  shouldUpdateLocalDisplayName = true,
+  requiresEmailConfirmation = false
+}) {
   if (!user?.id) {
     throw new Error('사용자 정보를 확인하지 못했어요.')
   }
 
-  const displayName = getDisplayNameFromEmail(email ?? user.email)
+  const localProfile = await geobugiApi.getProfile()
+  const { getSupabase } = await import('./supabase')
+  const supabase = getSupabase()
+  const remoteDisplayName = shouldUpsertRemoteProfile ? await getRemoteDisplayName(supabase, user.id) : ''
+  const localDisplayName =
+    localProfile?.remoteUserId === user.id ? normalizeDisplayName(localProfile.displayName) : ''
+  const resolvedDisplayName =
+    normalizeDisplayName(displayName) ||
+    remoteDisplayName ||
+    localDisplayName ||
+    getDisplayNameFromEmail(email ?? user.email)
 
   if (shouldUpsertRemoteProfile) {
-    const { getSupabase } = await import('./supabase')
-    const supabase = getSupabase()
-    const { error } = await supabase.from('profiles').upsert({
-      id: user.id,
-      display_name: displayName
+    await upsertRemoteProfile({
+      supabase,
+      userId: user.id,
+      displayName: resolvedDisplayName
     })
-
-    if (error) {
-      throw error
-    }
   }
 
-  await window.api?.profile?.update?.({ displayName })
+  if (shouldUpdateLocalDisplayName) {
+    await window.api?.profile?.update?.({ displayName: resolvedDisplayName })
+  }
+
   await window.api?.profile?.linkRemoteUser?.({ remoteUserId: user.id })
 
-  return { id: user.id, email: user.email ?? email, displayName }
+  return {
+    id: user.id,
+    email: user.email ?? email,
+    displayName: resolvedDisplayName,
+    requiresEmailConfirmation
+  }
 }
 
 function getFiniteNumber(value) {
@@ -194,13 +279,15 @@ export const geobugiApi = {
     const { data, error } = await supabase.auth.signUp({ email, password })
 
     if (error) {
-      throw error
+      throw toAuthError(error, '회원가입에 실패했어요.')
     }
 
     return syncRemoteProfile({
       user: data.user,
       email,
-      shouldUpsertRemoteProfile: Boolean(data.session)
+      shouldUpsertRemoteProfile: false,
+      shouldUpdateLocalDisplayName: false,
+      requiresEmailConfirmation: !data.session
     })
   },
 
@@ -221,10 +308,37 @@ export const geobugiApi = {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      throw error
+      throw toAuthError(error, '로그인에 실패했어요.')
     }
 
     return syncRemoteProfile({ user: data.user, email })
+  },
+
+  async updateDisplayName({ displayName }) {
+    const normalizedDisplayName = validateNickname(displayName)
+    await window.api?.profile?.update?.({ displayName: normalizedDisplayName })
+
+    const supabase = await getSupabaseClientIfConfigured()
+
+    if (!supabase) {
+      return { displayName: normalizedDisplayName }
+    }
+
+    const { data, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError) {
+      throw sessionError
+    }
+
+    if (data?.session?.user?.id) {
+      await upsertRemoteProfile({
+        supabase,
+        userId: data.session.user.id,
+        displayName: normalizedDisplayName
+      })
+    }
+
+    return { displayName: normalizedDisplayName }
   },
 
   async syncDailyPostureScore(dailyReport) {
