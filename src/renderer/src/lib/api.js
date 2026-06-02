@@ -78,7 +78,174 @@ const mockSettings = {
   }
 }
 
+function getDisplayNameFromEmail(email) {
+  const localPart = String(email ?? '').split('@')[0].trim()
+  return localPart.slice(0, 30) || 'geobugi'
+}
+
+function getMockRemoteUserId(email) {
+  const normalizedEmail = String(email ?? 'mock@geobugi.local').trim().toLowerCase()
+  let hash = 0
+
+  for (let index = 0; index < normalizedEmail.length; index += 1) {
+    hash = (hash * 31 + normalizedEmail.charCodeAt(index)) >>> 0
+  }
+
+  return `00000000-0000-4000-8000-${String(hash).padStart(12, '0').slice(-12)}`
+}
+
+async function syncMockProfile({ email }) {
+  const displayName = getDisplayNameFromEmail(email)
+  const remoteUserId = getMockRemoteUserId(email)
+
+  await window.api?.profile?.update?.({ displayName })
+  await window.api?.profile?.linkRemoteUser?.({ remoteUserId })
+
+  return { id: remoteUserId, email, displayName, mock: true }
+}
+
+async function syncRemoteProfile({ user, email, shouldUpsertRemoteProfile = true }) {
+  if (!user?.id) {
+    throw new Error('사용자 정보를 확인하지 못했어요.')
+  }
+
+  const displayName = getDisplayNameFromEmail(email ?? user.email)
+
+  if (shouldUpsertRemoteProfile) {
+    const { getSupabase } = await import('./supabase')
+    const supabase = getSupabase()
+    const { error } = await supabase.from('profiles').upsert({
+      id: user.id,
+      display_name: displayName
+    })
+
+    if (error) {
+      throw error
+    }
+  }
+
+  await window.api?.profile?.update?.({ displayName })
+  await window.api?.profile?.linkRemoteUser?.({ remoteUserId: user.id })
+
+  return { id: user.id, email: user.email ?? email, displayName }
+}
+
+function getFiniteNumber(value) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+async function getSupabaseClientIfConfigured() {
+  try {
+    const { getSupabase } = await import('./supabase')
+    return getSupabase()
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Supabase environment variables')) {
+      return null
+    }
+
+    throw error
+  }
+}
+
 export const geobugiApi = {
+  async getProfile() {
+    if (window.api?.profile?.get) {
+      return window.api.profile.get()
+    }
+
+    return null
+  },
+
+  async signUpWithEmail({ email, password }) {
+    let supabase
+
+    try {
+      const { getSupabase } = await import('./supabase')
+      supabase = getSupabase()
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Supabase environment variables')) {
+        return syncMockProfile({ email })
+      }
+
+      throw error
+    }
+
+    const { data, error } = await supabase.auth.signUp({ email, password })
+
+    if (error) {
+      throw error
+    }
+
+    return syncRemoteProfile({
+      user: data.user,
+      email,
+      shouldUpsertRemoteProfile: Boolean(data.session)
+    })
+  },
+
+  async signInWithEmail({ email, password }) {
+    let supabase
+
+    try {
+      const { getSupabase } = await import('./supabase')
+      supabase = getSupabase()
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Supabase environment variables')) {
+        return syncMockProfile({ email })
+      }
+
+      throw error
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      throw error
+    }
+
+    return syncRemoteProfile({ user: data.user, email })
+  },
+
+  async syncDailyPostureScore(dailyReport) {
+    const averageScore = getFiniteNumber(dailyReport?.cvStats?.averageScore)
+
+    if (averageScore === null) {
+      return null
+    }
+
+    const supabase = await getSupabaseClientIfConfigured()
+
+    if (!supabase) {
+      return null
+    }
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError) {
+      throw sessionError
+    }
+
+    if (!sessionData?.session?.user) {
+      return null
+    }
+
+    const sampleCount = getFiniteNumber(dailyReport?.cvStats?.sampleCount) ?? 0
+    const totalDurationSec = getFiniteNumber(dailyReport?.totalDurationSec) ?? 0
+    const { data, error } = await supabase.rpc('upsert_my_daily_posture_score', {
+      target_score_date: dailyReport?.date ?? toLocalIsoDate(),
+      target_average_score: averageScore,
+      target_sample_count: Math.max(0, Math.round(sampleCount)),
+      target_total_duration_sec: Math.max(0, Math.round(totalDurationSec))
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data
+  },
+
   async getDailyReport(input = {}) {
     if (window.api?.report?.getDaily) {
       return window.api.report.getDaily(input.date ? { date: input.date } : {})

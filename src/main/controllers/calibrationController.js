@@ -1,4 +1,5 @@
 import { getDB, withTransaction } from '../database/db'
+import { getCurrentRemoteUserId } from './profileController'
 
 function mapCalibration(row) {
   if (!row) {
@@ -7,6 +8,7 @@ function mapCalibration(row) {
 
   return {
     id: row.id,
+    remoteUserId: row.remote_user_id,
     shoulderSlope: row.shoulder_slope,
     neckForwardOffset: row.neck_forward_offset,
     earWidthRatio: row.ear_width_ratio,
@@ -25,13 +27,21 @@ export function startCalibration() {
 
 const saveCalibrationTransaction = withTransaction((input) => {
   const database = getDB()
+  const remoteUserId = getCurrentRemoteUserId()
 
-  database.prepare('UPDATE calibrations SET is_active = 0 WHERE is_active = 1').run()
+  if (!remoteUserId) {
+    throw new Error('로그인한 사용자 정보가 필요해요.')
+  }
+
+  database
+    .prepare('UPDATE calibrations SET is_active = 0 WHERE remote_user_id = ? AND is_active = 1')
+    .run(remoteUserId)
 
   const result = database
     .prepare(
       `
         INSERT INTO calibrations (
+          remote_user_id,
           shoulder_slope,
           neck_forward_offset,
           ear_width_ratio,
@@ -40,10 +50,11 @@ const saveCalibrationTransaction = withTransaction((input) => {
           confidence,
           sample_count,
           is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
       `
     )
     .run(
+      remoteUserId,
       input.shoulderSlope,
       input.neckForwardOffset,
       input.earWidthRatio ?? 0,
@@ -64,17 +75,24 @@ export function saveCalibration(input) {
 
 export function getActiveCalibration() {
   const database = getDB()
+  const remoteUserId = getCurrentRemoteUserId()
+
+  if (!remoteUserId) {
+    return null
+  }
+
   const row = database
     .prepare(
       `
         SELECT *
         FROM calibrations
-        WHERE is_active = 1
+        WHERE remote_user_id = ?
+          AND is_active = 1
         ORDER BY created_at DESC, id DESC
         LIMIT 1
       `
     )
-    .get()
+    .get(remoteUserId)
 
   return mapCalibration(row)
 }

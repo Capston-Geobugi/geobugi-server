@@ -1,4 +1,5 @@
 import { getDB } from '../database/db'
+import { getCurrentRemoteUserId } from './profileController'
 
 const SAMPLE_DURATION_SEC = 60
 
@@ -148,17 +149,18 @@ function createReportFromSamples(date, samples, yesterdaySamples = [], stretchin
   }
 }
 
-function getDailyCvSamples(database, date) {
+function getDailyCvSamples(database, date, remoteUserId) {
   const rows = database
     .prepare(
       `
         SELECT measured_at, rep_value
         FROM cv_posture_samples
-        WHERE date(measured_at) = date(?)
+        WHERE remote_user_id = ?
+          AND date(measured_at) = date(?)
         ORDER BY measured_at ASC, id ASC
       `
     )
-    .all(date)
+    .all(remoteUserId, date)
 
   return rows
     .map((row) => {
@@ -176,28 +178,30 @@ function getDailyCvSamples(database, date) {
     .filter(Boolean)
 }
 
-function getDailyStretchingSummary(database, date) {
+function getDailyStretchingSummary(database, date, remoteUserId) {
   const completedRow = database
     .prepare(
       `
         SELECT COUNT(*) AS count
         FROM stretching_missions
-        WHERE status = 'completed'
+        WHERE remote_user_id = ?
+          AND status = 'completed'
           AND completed_at IS NOT NULL
           AND date(completed_at) = date(?)
       `
     )
-    .get(date)
+    .get(remoteUserId, date)
   const skippedRow = database
     .prepare(
       `
         SELECT COUNT(*) AS count
         FROM stretching_missions
-        WHERE status = 'skipped'
+        WHERE remote_user_id = ?
+          AND status = 'skipped'
           AND date(started_at) = date(?)
       `
     )
-    .get(date)
+    .get(remoteUserId, date)
 
   return {
     completedCount: Number(completedRow?.count ?? 0),
@@ -205,7 +209,7 @@ function getDailyStretchingSummary(database, date) {
   }
 }
 
-function getStretchingSummariesByDate(database, startDate, endDate) {
+function getStretchingSummariesByDate(database, startDate, endDate, remoteUserId) {
   const rows = database
     .prepare(
       `
@@ -219,7 +223,8 @@ function getStretchingSummariesByDate(database, startDate, endDate) {
             COUNT(*) AS completed_count,
             0 AS skipped_count
           FROM stretching_missions
-          WHERE status = 'completed'
+          WHERE remote_user_id = ?
+            AND status = 'completed'
             AND completed_at IS NOT NULL
             AND date(completed_at) BETWEEN date(?) AND date(?)
           GROUP BY date(completed_at)
@@ -231,14 +236,15 @@ function getStretchingSummariesByDate(database, startDate, endDate) {
             0 AS completed_count,
             COUNT(*) AS skipped_count
           FROM stretching_missions
-          WHERE status = 'skipped'
+          WHERE remote_user_id = ?
+            AND status = 'skipped'
             AND date(started_at) BETWEEN date(?) AND date(?)
           GROUP BY date(started_at)
         )
         GROUP BY report_date
       `
     )
-    .all(startDate, endDate, startDate, endDate)
+    .all(remoteUserId, startDate, endDate, remoteUserId, startDate, endDate)
 
   return new Map(
     rows.map((row) => [
@@ -253,19 +259,38 @@ function getStretchingSummariesByDate(database, startDate, endDate) {
 
 export function getDailyReport({ date } = {}) {
   const database = getDB()
+  const remoteUserId = getCurrentRemoteUserId()
   const targetDate = date ?? toLocalIsoDate()
   const yesterdayDate = getPreviousIsoDate(targetDate)
-  const samples = getDailyCvSamples(database, targetDate)
-  const yesterdaySamples = getDailyCvSamples(database, yesterdayDate)
-  const stretchingSummary = getDailyStretchingSummary(database, targetDate)
+
+  if (!remoteUserId) {
+    return createReportFromSamples(targetDate, [], [], {})
+  }
+
+  const samples = getDailyCvSamples(database, targetDate, remoteUserId)
+  const yesterdaySamples = getDailyCvSamples(database, yesterdayDate, remoteUserId)
+  const stretchingSummary = getDailyStretchingSummary(database, targetDate, remoteUserId)
 
   return createReportFromSamples(targetDate, samples, yesterdaySamples, stretchingSummary)
 }
 
 export function getMonthlyReport(input = {}) {
   const database = getDB()
+  const remoteUserId = getCurrentRemoteUserId()
   const { year, month } = normalizeMonthInput(input)
   const { startDate, endDate } = getMonthBounds(year, month)
+
+  if (!remoteUserId) {
+    return {
+      year,
+      month,
+      startDate,
+      endDate,
+      reportDates: [],
+      days: []
+    }
+  }
+
   const rows = database
     .prepare(
       `
@@ -276,12 +301,13 @@ export function getMonthlyReport(input = {}) {
           MIN(rep_value) AS min_rep_value,
           MAX(rep_value) AS max_rep_value
         FROM cv_posture_samples
-        WHERE date(measured_at) BETWEEN date(?) AND date(?)
+        WHERE remote_user_id = ?
+          AND date(measured_at) BETWEEN date(?) AND date(?)
         GROUP BY date(measured_at)
         ORDER BY date(measured_at) ASC
       `
     )
-    .all(startDate, endDate)
+    .all(remoteUserId, startDate, endDate)
 
   return {
     year,
@@ -302,7 +328,19 @@ export function getMonthlyReport(input = {}) {
 
 export function getWeeklyReport({ startDate, endDate } = {}) {
   const database = getDB()
-  const stretchingSummariesByDate = getStretchingSummariesByDate(database, startDate, endDate)
+  const remoteUserId = getCurrentRemoteUserId()
+  const stretchingSummariesByDate = remoteUserId
+    ? getStretchingSummariesByDate(database, startDate, endDate, remoteUserId)
+    : new Map()
+
+  if (!remoteUserId) {
+    return {
+      startDate,
+      endDate,
+      days: []
+    }
+  }
+
   const rows = database
     .prepare(
       `
@@ -313,12 +351,13 @@ export function getWeeklyReport({ startDate, endDate } = {}) {
           MIN(rep_value) AS min_rep_value,
           MAX(rep_value) AS max_rep_value
         FROM cv_posture_samples
-        WHERE date(measured_at) BETWEEN date(?) AND date(?)
+        WHERE remote_user_id = ?
+          AND date(measured_at) BETWEEN date(?) AND date(?)
         GROUP BY date(measured_at)
         ORDER BY date(measured_at) ASC
       `
     )
-    .all(startDate, endDate)
+    .all(remoteUserId, startDate, endDate)
 
   const days = rows.map((row) => {
     const averageScore = toPostureScore(row.average_rep_value)
