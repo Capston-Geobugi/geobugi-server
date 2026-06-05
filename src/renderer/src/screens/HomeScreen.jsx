@@ -49,7 +49,7 @@ function HomeScreen({
             <span>안녕하세요,</span>
             <br />
             {greetingName}
-            <span>님</span>
+            <span>님. 🐢</span>
           </h1>
         </header>
 

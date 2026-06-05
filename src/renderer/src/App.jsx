@@ -7,16 +7,41 @@ import HomeScreen from './screens/HomeScreen'
 import IdleScreen from './screens/IdleScreen'
 import LoadingScreen from './screens/LoadingScreen'
 import NicknameOnboardingScreen from './screens/NicknameOnboardingScreen'
+import PostureAdBannerScreen from './screens/PostureAdBannerScreen'
 import ReportScreen from './screens/ReportScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import SocialScreen from './screens/SocialScreen'
 import StretchingScreen from './screens/StretchingScreen'
 
+const POSTURE_RECOVERY_WINDOW_MS = 30 * 60 * 1000
+const POSTURE_RECOVERY_SAMPLE_INTERVAL_MS = 30 * 1000
+const POSTURE_RECOVERY_TARGET_SCORE = 70
+
+function getAverageScore(samples) {
+  const validSamples = samples.filter((sample) => Number.isFinite(sample))
+
+  if (validSamples.length === 0) {
+    return null
+  }
+
+  return validSamples.reduce((total, sample) => total + sample, 0) / validSamples.length
+}
+
+function createPostureRecoveryCycle(now = Date.now()) {
+  return {
+    mode: 'baseline',
+    previousAverage: null,
+    windowStartedAt: now,
+    samples: []
+  }
+}
+
 function App() {
   const initialScreen = new URLSearchParams(window.location.search).get('screen') || 'home'
   const isCalibrationWindow = initialScreen === 'calibration'
+  const isPostureBannerWindow = initialScreen === 'posture-banner'
   const usesAuthGate = ['home', 'login', 'signup'].includes(initialScreen)
-  const shouldPrepareCvOnBoot = usesAuthGate
+  const shouldPrepareCvOnBoot = usesAuthGate && !isPostureBannerWindow
   const [screen, setScreen] = useState(initialScreen)
   const [bootReady, setBootReady] = useState(!usesAuthGate)
   const [bootMessage, setBootMessage] = useState('앱 설정을 불러오고 있어요')
@@ -39,8 +64,13 @@ function App() {
   const [selectedSocialRoom, setSelectedSocialRoom] = useState(null)
   const [stretchingReminderVisible, setStretchingReminderVisible] = useState(false)
   const [stretchingTimerStartedAt, setStretchingTimerStartedAt] = useState(() => Date.now())
+  const [postureRecoveryBanner, setPostureRecoveryBanner] = useState(null)
+  const [dismissedPostureRecoveryBannerId, setDismissedPostureRecoveryBannerId] = useState(null)
   const stretchingIntervalRef = useRef(null)
   const postureScoreSyncEnabledRef = useRef(false)
+  const postureRecoveryCycleRef = useRef(createPostureRecoveryCycle())
+  const postureRecoveryBannerIdRef = useRef(0)
+  const currentPostureScoreRef = useRef(null)
   const stretchingIntervalMinutes = Number(settings?.stretching?.intervalMinutes ?? 60)
   const hasCompletedPostureMeasurement = Boolean(calibration)
 
@@ -66,6 +96,95 @@ function App() {
   const isRealtimeMeasuring = isCvMonitoring && !paused
   const postureScore = isRealtimeMeasuring ? realtimePostureScore : averagePostureScore
   const homeScoreTitle = isRealtimeMeasuring ? '실시간 자세 점수' : '오늘의 평균 자세 점수'
+  const visiblePostureRecoveryBanner =
+    postureRecoveryBanner?.id !== dismissedPostureRecoveryBannerId ? postureRecoveryBanner : null
+
+  useEffect(() => {
+    currentPostureScoreRef.current =
+      isRealtimeMeasuring && typeof realtimePostureScore === 'number' ? realtimePostureScore : null
+  }, [isRealtimeMeasuring, realtimePostureScore])
+
+  useEffect(() => {
+    if (!isRealtimeMeasuring) {
+      return undefined
+    }
+
+    function evaluatePostureRecoveryWindow() {
+      const currentScore = currentPostureScoreRef.current
+
+      if (typeof currentScore !== 'number') {
+        return
+      }
+
+      const now = Date.now()
+      const cycle = postureRecoveryCycleRef.current
+      cycle.samples.push(currentScore)
+
+      if (now - cycle.windowStartedAt < POSTURE_RECOVERY_WINDOW_MS) {
+        return
+      }
+
+      const currentAverage = getAverageScore(cycle.samples)
+
+      if (currentAverage === null) {
+        postureRecoveryCycleRef.current = createPostureRecoveryCycle(now)
+        return
+      }
+
+      if (cycle.mode === 'baseline') {
+        if (currentAverage < POSTURE_RECOVERY_TARGET_SCORE) {
+          const nextBannerId = postureRecoveryBannerIdRef.current + 1
+          postureRecoveryBannerIdRef.current = nextBannerId
+          setPostureRecoveryBanner({
+            id: nextBannerId,
+            previousAverage: null,
+            currentAverage
+          })
+          postureRecoveryCycleRef.current = {
+            mode: 'recovery',
+            previousAverage: currentAverage,
+            windowStartedAt: now,
+            samples: []
+          }
+          return
+        }
+
+        postureRecoveryCycleRef.current = createPostureRecoveryCycle(now)
+        return
+      }
+
+      const improved =
+        currentAverage >= POSTURE_RECOVERY_TARGET_SCORE || currentAverage > cycle.previousAverage
+
+      if (improved) {
+        setPostureRecoveryBanner(null)
+        postureRecoveryCycleRef.current = createPostureRecoveryCycle(now)
+        return
+      }
+
+      const nextBannerId = postureRecoveryBannerIdRef.current + 1
+      postureRecoveryBannerIdRef.current = nextBannerId
+      setPostureRecoveryBanner({
+        id: nextBannerId,
+        previousAverage: cycle.previousAverage,
+        currentAverage
+      })
+      postureRecoveryCycleRef.current = {
+        mode: 'recovery',
+        previousAverage: currentAverage,
+        windowStartedAt: now,
+        samples: []
+      }
+    }
+
+    evaluatePostureRecoveryWindow()
+    const intervalId = window.setInterval(
+      evaluatePostureRecoveryWindow,
+      POSTURE_RECOVERY_SAMPLE_INTERVAL_MS
+    )
+
+    return () => window.clearInterval(intervalId)
+  }, [isRealtimeMeasuring])
 
   const refreshReport = useCallback(async (input = {}) => {
     const daily = await geobugiApi.getDailyReport(input)
@@ -162,6 +281,10 @@ function App() {
 
   useEffect(() => {
     queueMicrotask(async () => {
+      if (isPostureBannerWindow) {
+        return
+      }
+
       if (!usesAuthGate) {
         await bootstrapServerState()
         return
@@ -180,7 +303,40 @@ function App() {
         setScreen('signup')
       }
     })
-  }, [bootstrapServerState, usesAuthGate])
+  }, [bootstrapServerState, isPostureBannerWindow, usesAuthGate])
+
+  useEffect(() => {
+    if (!window.api?.appWindow?.onPostureBannerDismissed) {
+      return undefined
+    }
+
+    return geobugiApi.onPostureBannerDismissed((payload) => {
+      const bannerId = Number(payload?.id)
+
+      if (Number.isFinite(bannerId)) {
+        setDismissedPostureRecoveryBannerId(bannerId)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (isPostureBannerWindow) {
+      return undefined
+    }
+
+    if (screen !== 'idle') {
+      void geobugiApi.closePostureBannerWindow()
+      return undefined
+    }
+
+    if (visiblePostureRecoveryBanner?.id) {
+      void geobugiApi.showPostureBannerWindow({ id: visiblePostureRecoveryBanner.id })
+      return undefined
+    }
+
+    void geobugiApi.closePostureBannerWindow()
+    return undefined
+  }, [isPostureBannerWindow, screen, visiblePostureRecoveryBanner?.id])
 
   useEffect(() => {
     if (screen !== 'report') {
@@ -455,6 +611,20 @@ function App() {
       signupRequiresEmailConfirmation
         ? '닉네임이 저장됐어요. 이메일 인증을 완료한 뒤 로그인해주세요.'
         : '닉네임이 저장됐어요. 로그인해주세요.'
+    )
+  }
+
+  if (isPostureBannerWindow) {
+    const searchParams = new URLSearchParams(window.location.search)
+    const bannerId = Number(searchParams.get('id'))
+    const bannerPosition = searchParams.get('position') === 'bottom' ? 'bottom' : 'top'
+
+    return (
+      <PostureAdBannerScreen
+        bannerId={Number.isFinite(bannerId) ? bannerId : null}
+        position={bannerPosition}
+        onDismiss={geobugiApi.dismissPostureBannerWindow}
+      />
     )
   }
 
