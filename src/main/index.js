@@ -10,16 +10,17 @@ let mainWindow = null
 let calibrationWindow = null
 let idleWindow = null
 const postureBannerWindows = {
-  top: null,
   bottom: null
 }
 let calibrationCompleted = false
 let idleWindowPosition = null
+let postureBannerAutoCloseTimer = null
 
 const WIDGET_WINDOW_WIDTH_RATIO = 0.32
 const WIDGET_WINDOW_HEIGHT_RATIO = 0.38
 const WIDGET_MARGIN_RATIO = 0.012
 const POSTURE_BANNER_HEIGHT = 44
+const POSTURE_BANNER_AUTO_CLOSE_MS = 5 * 60 * 1000
 
 function getAppIconPath() {
   if (is.dev) {
@@ -354,12 +355,25 @@ function createPostureBannerWindow(input = {}, position = 'top') {
 }
 
 function createPostureBannerWindows(input = {}) {
-  createPostureBannerWindow(input, 'top')
   createPostureBannerWindow(input, 'bottom')
+  schedulePostureBannerAutoClose()
   return { ok: true }
 }
 
-function closePostureBannerWindows() {
+function schedulePostureBannerAutoClose() {
+  clearTimeout(postureBannerAutoCloseTimer)
+  postureBannerAutoCloseTimer = setTimeout(() => {
+    postureBannerAutoCloseTimer = null
+    closePostureBannerWindows({ clearTimer: false })
+  }, POSTURE_BANNER_AUTO_CLOSE_MS)
+}
+
+function closePostureBannerWindows({ clearTimer = true } = {}) {
+  if (clearTimer) {
+    clearTimeout(postureBannerAutoCloseTimer)
+    postureBannerAutoCloseTimer = null
+  }
+
   Object.values(postureBannerWindows).forEach((window) => {
     window?.close()
   })
@@ -404,17 +418,6 @@ function registerWindowHandlers() {
   })
 
   ipcMain.handle('window:closePostureBanner', () => {
-    closePostureBannerWindows()
-    return { ok: true }
-  })
-
-  ipcMain.handle('window:dismissPostureBanner', (_event, input = {}) => {
-    const bannerId = Number(input.id)
-
-    if (Number.isFinite(bannerId)) {
-      idleWindow?.webContents.send('postureBanner:dismissed', { id: bannerId })
-    }
-
     closePostureBannerWindows()
     return { ok: true }
   })

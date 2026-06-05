@@ -65,7 +65,6 @@ function App() {
   const [stretchingReminderVisible, setStretchingReminderVisible] = useState(false)
   const [stretchingTimerStartedAt, setStretchingTimerStartedAt] = useState(() => Date.now())
   const [postureRecoveryBanner, setPostureRecoveryBanner] = useState(null)
-  const [dismissedPostureRecoveryBannerId, setDismissedPostureRecoveryBannerId] = useState(null)
   const stretchingIntervalRef = useRef(null)
   const postureScoreSyncEnabledRef = useRef(false)
   const postureRecoveryCycleRef = useRef(createPostureRecoveryCycle())
@@ -96,8 +95,6 @@ function App() {
   const isRealtimeMeasuring = isCvMonitoring && !paused
   const postureScore = isRealtimeMeasuring ? realtimePostureScore : averagePostureScore
   const homeScoreTitle = isRealtimeMeasuring ? '실시간 자세 점수' : '오늘의 평균 자세 점수'
-  const visiblePostureRecoveryBanner =
-    postureRecoveryBanner?.id !== dismissedPostureRecoveryBannerId ? postureRecoveryBanner : null
 
   useEffect(() => {
     currentPostureScoreRef.current =
@@ -133,13 +130,6 @@ function App() {
 
       if (cycle.mode === 'baseline') {
         if (currentAverage < POSTURE_RECOVERY_TARGET_SCORE) {
-          const nextBannerId = postureRecoveryBannerIdRef.current + 1
-          postureRecoveryBannerIdRef.current = nextBannerId
-          setPostureRecoveryBanner({
-            id: nextBannerId,
-            previousAverage: null,
-            currentAverage
-          })
           postureRecoveryCycleRef.current = {
             mode: 'recovery',
             previousAverage: currentAverage,
@@ -306,20 +296,6 @@ function App() {
   }, [bootstrapServerState, isPostureBannerWindow, usesAuthGate])
 
   useEffect(() => {
-    if (!window.api?.appWindow?.onPostureBannerDismissed) {
-      return undefined
-    }
-
-    return geobugiApi.onPostureBannerDismissed((payload) => {
-      const bannerId = Number(payload?.id)
-
-      if (Number.isFinite(bannerId)) {
-        setDismissedPostureRecoveryBannerId(bannerId)
-      }
-    })
-  }, [])
-
-  useEffect(() => {
     if (isPostureBannerWindow) {
       return undefined
     }
@@ -329,14 +305,14 @@ function App() {
       return undefined
     }
 
-    if (visiblePostureRecoveryBanner?.id) {
-      void geobugiApi.showPostureBannerWindow({ id: visiblePostureRecoveryBanner.id })
+    if (postureRecoveryBanner?.id) {
+      void geobugiApi.showPostureBannerWindow({ id: postureRecoveryBanner.id })
       return undefined
     }
 
     void geobugiApi.closePostureBannerWindow()
     return undefined
-  }, [isPostureBannerWindow, screen, visiblePostureRecoveryBanner?.id])
+  }, [isPostureBannerWindow, postureRecoveryBanner?.id, screen])
 
   useEffect(() => {
     if (screen !== 'report') {
@@ -616,16 +592,9 @@ function App() {
 
   if (isPostureBannerWindow) {
     const searchParams = new URLSearchParams(window.location.search)
-    const bannerId = Number(searchParams.get('id'))
     const bannerPosition = searchParams.get('position') === 'bottom' ? 'bottom' : 'top'
 
-    return (
-      <PostureAdBannerScreen
-        bannerId={Number.isFinite(bannerId) ? bannerId : null}
-        position={bannerPosition}
-        onDismiss={geobugiApi.dismissPostureBannerWindow}
-      />
-    )
+    return <PostureAdBannerScreen position={bannerPosition} />
   }
 
   if (!bootReady) {

@@ -44,8 +44,6 @@ const api = {
     moveIdle: (input) => electronAPI.ipcRenderer.invoke('window:moveIdle', input),
     showPostureBanner: (input) => electronAPI.ipcRenderer.invoke('window:showPostureBanner', input),
     closePostureBanner: () => electronAPI.ipcRenderer.invoke('window:closePostureBanner'),
-    dismissPostureBanner: (input) =>
-      electronAPI.ipcRenderer.invoke('window:dismissPostureBanner', input),
     openStretching: () => electronAPI.ipcRenderer.invoke('window:openStretching'),
     completeStretching: () => electronAPI.ipcRenderer.invoke('window:completeStretching'),
     onNavigate: (callback) => {
@@ -70,14 +68,6 @@ const api = {
 
       return () => {
         ipcRenderer.removeListener('calibration:completed', listener)
-      }
-    },
-    onPostureBannerDismissed: (callback) => {
-      const listener = (_event, payload) => callback(payload)
-      ipcRenderer.on('postureBanner:dismissed', listener)
-
-      return () => {
-        ipcRenderer.removeListener('postureBanner:dismissed', listener)
       }
     }
   },

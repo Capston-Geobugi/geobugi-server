@@ -79,7 +79,9 @@ const mockSettings = {
 }
 
 function getDisplayNameFromEmail(email) {
-  const localPart = String(email ?? '').split('@')[0].trim()
+  const localPart = String(email ?? '')
+    .split('@')[0]
+    .trim()
   return localPart.slice(0, 30) || 'geobugi'
 }
 
@@ -124,7 +126,9 @@ function toAuthError(error, fallbackMessage = '인증 처리에 실패했어요.
 }
 
 function getMockRemoteUserId(email) {
-  const normalizedEmail = String(email ?? 'mock@geobugi.local').trim().toLowerCase()
+  const normalizedEmail = String(email ?? 'mock@geobugi.local')
+    .trim()
+    .toLowerCase()
   let hash = 0
 
   for (let index = 0; index < normalizedEmail.length; index += 1) {
@@ -184,7 +188,9 @@ async function syncRemoteProfile({
   const localProfile = await geobugiApi.getProfile()
   const { getSupabase } = await import('./supabase')
   const supabase = getSupabase()
-  const remoteDisplayName = shouldUpsertRemoteProfile ? await getRemoteDisplayName(supabase, user.id) : ''
+  const remoteDisplayName = shouldUpsertRemoteProfile
+    ? await getRemoteDisplayName(supabase, user.id)
+    : ''
   const localDisplayName =
     localProfile?.remoteUserId === user.id ? normalizeDisplayName(localProfile.displayName) : ''
   const resolvedDisplayName =
@@ -665,14 +671,6 @@ export const geobugiApi = {
     return { ok: true }
   },
 
-  async dismissPostureBannerWindow(input) {
-    if (window.api?.appWindow?.dismissPostureBanner) {
-      return window.api.appWindow.dismissPostureBanner(input)
-    }
-
-    return { ok: true }
-  },
-
   async updateStretchingSettings(input) {
     if (window.api?.settings?.updateStretching) {
       return window.api.settings.updateStretching(input)
@@ -685,14 +683,6 @@ export const geobugiApi = {
   onSettingsChanged(callback) {
     if (window.api?.settings?.onChanged) {
       return window.api.settings.onChanged(callback)
-    }
-
-    return () => {}
-  },
-
-  onPostureBannerDismissed(callback) {
-    if (window.api?.appWindow?.onPostureBannerDismissed) {
-      return window.api.appWindow.onPostureBannerDismissed(callback)
     }
 
     return () => {}

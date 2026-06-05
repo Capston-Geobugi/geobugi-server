@@ -1,6 +1,4 @@
 /* eslint-disable react/prop-types */
-import { X } from 'lucide-react'
-
 const POSTURE_AD_ITEMS = [
   { company: '쿠팡', color: '#2f6fed', copy: '로켓배송으로 필요한 상품을 빠르게' },
   { company: '배달의민족', color: '#2ac1bc', copy: '오늘 뭐 먹지? 배민에서 골라보세요' },
@@ -11,21 +9,13 @@ const POSTURE_AD_ITEMS = [
   { company: '카카오페이', color: '#ffcd00', copy: '결제와 송금을 한 번에' }
 ]
 
-function PostureAdBannerScreen({ bannerId, position, onDismiss }) {
+function PostureAdBannerScreen({ position }) {
   return (
     <main className="posture-ad-screen">
       <section
         className={`posture-ad-banner posture-ad-banner-${position}`}
         aria-label="자세 회복 배너"
       >
-        <button
-          className="posture-ad-close"
-          type="button"
-          onClick={() => onDismiss({ id: bannerId })}
-          aria-label="자세 회복 배너 닫기"
-        >
-          <X size={15} strokeWidth={3} />
-        </button>
         <strong className="posture-ad-warning">화면과 거리를 두세요</strong>
         <div className="posture-ad-marquee" aria-hidden="true">
           <div className="posture-ad-track">

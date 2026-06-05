@@ -3012,42 +3012,24 @@ button:disabled {
   top: 0;
   bottom: auto;
   z-index: 7;
+  box-sizing: border-box;
   display: grid;
-  grid-template-columns: 34px max-content minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
   overflow: hidden;
-  border: 0;
-  border-top: 1px solid rgba(255, 126, 76, 0.2);
+  border: 4px solid #e94f1d;
   border-radius: 0;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: none;
   pointer-events: auto;
 }
 
-.posture-ad-close {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-left: 6px;
-  border: 0;
-  border-radius: 999px;
-  color: #687386;
-  background: transparent;
-  cursor: pointer;
-}
-
-.posture-ad-close:hover {
-  color: #202b3d;
-  background: #eef3f8;
-}
-
 .posture-ad-warning {
   display: inline-flex;
   align-items: center;
   height: 26px;
-  margin: 0 10px 0 7px;
+  margin: 0 10px 0 12px;
   padding: 0 12px;
   color: #fff;
   background: #e94f1d;
