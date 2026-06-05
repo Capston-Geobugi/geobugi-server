@@ -23,7 +23,7 @@ function IdleScreen({
   const widgetOpacity = Number(widgetSettings?.opacity ?? 1)
   const widgetScale = Number(widgetSettings?.scale ?? 1)
   const widgetFlipped = Boolean(widgetSettings?.flipX)
-  const controlsTopPercent = Math.max(0, 6 - (widgetScale - 1) * 20)
+  const controlsTopPercent = Math.max(0, 16 - (widgetScale - 1) * 20)
   const [controlsVisible, setControlsVisible] = useState(false)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [turtleMenu, setTurtleMenu] = useState(null)
