@@ -42,44 +42,37 @@ function IdleScreen({
     src: '/src/assets/turtle.riv',
     stateMachines: 'State Machine 1',
     shouldDisableRiveListeners: true,
-    autoplay: true,
+    autoplay: true
   })
   useTurtleController(rive)
-  const neckInput = useStateMachineInput(
-      rive,
-      'State Machine 1',
-      'neck_step'
-    )
-    if (neckInput) {
-      neckInput.value = neckStage
-    } 
-    const smoothNeckRef = useRef(neckStage)
-    useEffect(() => {
+  const neckInput = useStateMachineInput(rive, 'State Machine 1', 'neck_step')
+  if (neckInput) {
+    neckInput.value = neckStage
+  }
+  const smoothNeckRef = useRef(neckStage)
+  useEffect(() => {
+    let animationFrame
 
-      let animationFrame
+    function animate() {
+      if (!neckInput) return
 
-      function animate() {
+      const current = smoothNeckRef.current
+      const target = neckStage
 
-        if (!neckInput) return
+      // 부드럽게 따라가게
+      const next = current + (target - current) * 0.03
 
-        const current = smoothNeckRef.current
-        const target = neckStage
+      smoothNeckRef.current = next
 
-        // 부드럽게 따라가게
-        const next = current + (target - current) * 0.03
+      neckInput.value = next
 
-        smoothNeckRef.current = next
+      animationFrame = requestAnimationFrame(animate)
+    }
 
-        neckInput.value = next
+    animate()
 
-        animationFrame = requestAnimationFrame(animate)
-      }
-
-      animate()
-
-      return () => cancelAnimationFrame(animationFrame)
-
-    }, [neckInput, neckStage])
+    return () => cancelAnimationFrame(animationFrame)
+  }, [neckInput, neckStage])
 
   useEffect(() => {
     return () => {
@@ -227,7 +220,8 @@ function IdleScreen({
       dragStateRef.current.visualInsets = {
         left: turtleRect.left + turtleRect.width * RIVE_LEFT_VISUAL_TRIM_RATIO,
         top: turtleRect.top,
-        right: window.innerWidth - turtleRect.right + turtleRect.width * RIVE_RIGHT_VISUAL_TRIM_RATIO,
+        right:
+          window.innerWidth - turtleRect.right + turtleRect.width * RIVE_RIGHT_VISUAL_TRIM_RATIO,
         bottom: window.innerHeight - turtleRect.bottom
       }
     }

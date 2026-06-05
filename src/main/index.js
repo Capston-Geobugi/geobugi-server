@@ -9,12 +9,17 @@ import { pauseCvMonitoring, registerCvShutdown } from './controllers/cvControlle
 let mainWindow = null
 let calibrationWindow = null
 let idleWindow = null
+const postureBannerWindows = {
+  top: null,
+  bottom: null
+}
 let calibrationCompleted = false
 let idleWindowPosition = null
 
 const WIDGET_WINDOW_WIDTH_RATIO = 0.32
 const WIDGET_WINDOW_HEIGHT_RATIO = 0.38
 const WIDGET_MARGIN_RATIO = 0.012
+const POSTURE_BANNER_HEIGHT = 44
 
 function getAppIconPath() {
   if (is.dev) {
@@ -45,6 +50,19 @@ function getWidgetWindowBounds() {
     x: idleWindowPosition.x,
     y: idleWindowPosition.y
   })
+}
+
+function getPostureBannerWindowBounds(position = 'top') {
+  const { workArea } = screen.getPrimaryDisplay()
+  const y =
+    position === 'bottom' ? workArea.y + workArea.height - POSTURE_BANNER_HEIGHT : workArea.y
+
+  return {
+    width: workArea.width,
+    height: POSTURE_BANNER_HEIGHT,
+    x: workArea.x,
+    y
+  }
 }
 
 function clampWidgetWindowBounds(bounds) {
@@ -148,6 +166,24 @@ function keepIdleWindowOnTop() {
   }
 
   idleWindow.moveTop()
+}
+
+function keepPostureBannerWindowOnTop(window) {
+  if (!window || window.isDestroyed()) {
+    return
+  }
+
+  if (process.platform === 'darwin') {
+    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  }
+
+  try {
+    window.setAlwaysOnTop(true, 'screen-saver')
+  } catch {
+    window.setAlwaysOnTop(true)
+  }
+
+  window.moveTop()
 }
 
 function createMainWindow() {
@@ -263,6 +299,72 @@ function createIdleWindow() {
   loadRenderer(idleWindow, '?screen=idle')
 }
 
+function createPostureBannerWindow(input = {}, position = 'top') {
+  const bannerId = Number(input.id)
+  const route = `?screen=posture-banner&id=${encodeURIComponent(bannerId)}&position=${position}`
+  const currentWindow = postureBannerWindows[position]
+
+  if (currentWindow && !currentWindow.isDestroyed()) {
+    currentWindow.setBounds(getPostureBannerWindowBounds(position))
+    loadRenderer(currentWindow, route)
+    keepPostureBannerWindowOnTop(currentWindow)
+    currentWindow.show()
+    return { ok: true }
+  }
+
+  const bounds = getPostureBannerWindowBounds(position)
+
+  const nextWindow = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
+    useContentSize: true,
+    x: bounds.x,
+    y: bounds.y,
+    resizable: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    alwaysOnTop: true,
+    visibleOnAllWorkspaces: process.platform === 'darwin',
+    skipTaskbar: true,
+    show: false,
+    autoHideMenuBar: true,
+    icon: getAppIconPath(),
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  postureBannerWindows[position] = nextWindow
+
+  nextWindow.on('ready-to-show', () => {
+    keepPostureBannerWindowOnTop(nextWindow)
+    nextWindow.show()
+  })
+
+  nextWindow.on('closed', () => {
+    if (postureBannerWindows[position] === nextWindow) {
+      postureBannerWindows[position] = null
+    }
+  })
+
+  loadRenderer(nextWindow, route)
+  return { ok: true }
+}
+
+function createPostureBannerWindows(input = {}) {
+  createPostureBannerWindow(input, 'top')
+  createPostureBannerWindow(input, 'bottom')
+  return { ok: true }
+}
+
+function closePostureBannerWindows() {
+  Object.values(postureBannerWindows).forEach((window) => {
+    window?.close()
+  })
+}
+
 function registerWindowHandlers() {
   ipcMain.handle('window:openCalibration', () => {
     calibrationCompleted = false
@@ -293,6 +395,27 @@ function registerWindowHandlers() {
 
   ipcMain.handle('window:closeIdle', () => {
     idleWindow?.close()
+    closePostureBannerWindows()
+    return { ok: true }
+  })
+
+  ipcMain.handle('window:showPostureBanner', (_event, input = {}) => {
+    return createPostureBannerWindows(input)
+  })
+
+  ipcMain.handle('window:closePostureBanner', () => {
+    closePostureBannerWindows()
+    return { ok: true }
+  })
+
+  ipcMain.handle('window:dismissPostureBanner', (_event, input = {}) => {
+    const bannerId = Number(input.id)
+
+    if (Number.isFinite(bannerId)) {
+      idleWindow?.webContents.send('postureBanner:dismissed', { id: bannerId })
+    }
+
+    closePostureBannerWindows()
     return { ok: true }
   })
 

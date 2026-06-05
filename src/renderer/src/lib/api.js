@@ -649,6 +649,30 @@ export const geobugiApi = {
     return { ok: true }
   },
 
+  async showPostureBannerWindow(input) {
+    if (window.api?.appWindow?.showPostureBanner) {
+      return window.api.appWindow.showPostureBanner(input)
+    }
+
+    return { ok: true }
+  },
+
+  async closePostureBannerWindow() {
+    if (window.api?.appWindow?.closePostureBanner) {
+      return window.api.appWindow.closePostureBanner()
+    }
+
+    return { ok: true }
+  },
+
+  async dismissPostureBannerWindow(input) {
+    if (window.api?.appWindow?.dismissPostureBanner) {
+      return window.api.appWindow.dismissPostureBanner(input)
+    }
+
+    return { ok: true }
+  },
+
   async updateStretchingSettings(input) {
     if (window.api?.settings?.updateStretching) {
       return window.api.settings.updateStretching(input)
@@ -661,6 +685,14 @@ export const geobugiApi = {
   onSettingsChanged(callback) {
     if (window.api?.settings?.onChanged) {
       return window.api.settings.onChanged(callback)
+    }
+
+    return () => {}
+  },
+
+  onPostureBannerDismissed(callback) {
+    if (window.api?.appWindow?.onPostureBannerDismissed) {
+      return window.api.appWindow.onPostureBannerDismissed(callback)
     }
 
     return () => {}
