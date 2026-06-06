@@ -90,7 +90,7 @@ function getMeasuredScore(member) {
     return null
   }
 
-  return getNullableScore(member?.average_score)
+  return getNullableScore(member?.shared_score) ?? getNullableScore(member?.average_score)
 }
 
 const rankBadges = {

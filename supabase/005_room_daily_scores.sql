@@ -11,6 +11,8 @@ returns table (
   display_name text,
   score_date date,
   average_score numeric,
+  duration_score numeric,
+  shared_score numeric,
   sample_count integer,
   total_duration_sec integer,
   score_updated_at timestamptz,
@@ -51,6 +53,8 @@ begin
     p.display_name,
     target_score_date as score_date,
     s.average_score,
+    s.duration_score,
+    s.shared_score,
     coalesce(s.sample_count, 0) as sample_count,
     coalesce(s.total_duration_sec, 0) as total_duration_sec,
     s.updated_at as score_updated_at,
@@ -63,7 +67,7 @@ begin
    and s.score_date = target_score_date
   where rm.room_id = target_room_id
   order by
-    s.average_score desc nulls last,
+    coalesce(s.shared_score, s.average_score) desc nulls last,
     s.total_duration_sec desc nulls last,
     rm.joined_at asc;
 end;

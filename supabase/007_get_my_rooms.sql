@@ -15,6 +15,8 @@ returns table (
   member_count integer,
   my_score_date date,
   my_average_score numeric,
+  my_duration_score numeric,
+  my_shared_score numeric,
   my_sample_count integer,
   my_total_duration_sec integer,
   my_score_updated_at timestamptz
@@ -46,6 +48,8 @@ begin
     room_counts.member_count,
     target_score_date as my_score_date,
     my_score.average_score as my_average_score,
+    my_score.duration_score as my_duration_score,
+    my_score.shared_score as my_shared_score,
     coalesce(my_score.sample_count, 0) as my_sample_count,
     coalesce(my_score.total_duration_sec, 0) as my_total_duration_sec,
     my_score.updated_at as my_score_updated_at

@@ -13,6 +13,12 @@ create table if not exists public.daily_posture_scores (
   user_id uuid not null references auth.users(id) on delete cascade,
   score_date date not null,
   average_score numeric(5, 2) not null check (average_score >= 0 and average_score <= 100),
+  duration_score numeric(5, 2) check (
+    duration_score is null or (duration_score >= 0 and duration_score <= 100)
+  ),
+  shared_score numeric(5, 2) check (
+    shared_score is null or (shared_score >= 0 and shared_score <= 100)
+  ),
   sample_count integer not null default 0 check (sample_count >= 0),
   total_duration_sec integer not null default 0 check (total_duration_sec >= 0),
   created_at timestamptz not null default now(),
@@ -22,6 +28,9 @@ create table if not exists public.daily_posture_scores (
 
 create index if not exists idx_daily_posture_scores_score_date_average_score
   on public.daily_posture_scores (score_date, average_score desc);
+
+create index if not exists idx_daily_posture_scores_score_date_shared_score
+  on public.daily_posture_scores (score_date, shared_score desc);
 
 create index if not exists idx_daily_posture_scores_user_id_score_date
   on public.daily_posture_scores (user_id, score_date);
@@ -103,11 +112,13 @@ select
   s.user_id,
   p.display_name,
   s.average_score,
+  s.duration_score,
+  s.shared_score,
   s.sample_count,
   s.total_duration_sec,
   rank() over (
     partition by s.score_date
-    order by s.average_score desc, s.total_duration_sec desc, s.updated_at asc
+    order by coalesce(s.shared_score, s.average_score) desc, s.total_duration_sec desc, s.updated_at asc
   ) as rank,
   s.updated_at
 from public.daily_posture_scores s
