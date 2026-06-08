@@ -1,6 +1,6 @@
 import { BrowserWindow, app } from 'electron'
 import { spawn } from 'child_process'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync } from 'fs'
 import { dirname, join } from 'path'
 
 import { getDB } from '../database/db'
@@ -24,6 +24,17 @@ function getPythonCommand() {
   return process.platform === 'win32' ? 'python' : 'python3'
 }
 
+function getCvProcessEnv() {
+  const matplotlibConfigDir = join(app.getPath('userData'), 'matplotlib')
+  mkdirSync(matplotlibConfigDir, { recursive: true })
+
+  return {
+    ...process.env,
+    MPLCONFIGDIR: matplotlibConfigDir,
+    PYTHONUNBUFFERED: '1'
+  }
+}
+
 function toCvSensitivity(userSensitivity) {
   const numericValue = Number(userSensitivity)
 
@@ -31,10 +42,7 @@ function toCvSensitivity(userSensitivity) {
     throw new Error('Sensitivity must be a number.')
   }
 
-  const clampedValue = Math.min(
-    MAX_USER_SENSITIVITY,
-    Math.max(MIN_USER_SENSITIVITY, numericValue)
-  )
+  const clampedValue = Math.min(MAX_USER_SENSITIVITY, Math.max(MIN_USER_SENSITIVITY, numericValue))
 
   return MIN_USER_SENSITIVITY + MAX_USER_SENSITIVITY - clampedValue
 }
@@ -52,9 +60,14 @@ function sendCvEvent(type, payload) {
 }
 
 function getCvScriptPath() {
+  const appPath = app.getAppPath()
+  const unpackedAppPath = appPath.replace('app.asar', 'app.asar.unpacked')
   const candidates = [
     join(process.cwd(), 'cv', 'cv_main.py'),
-    join(app.getAppPath(), 'cv', 'cv_main.py'),
+    ...(app.isPackaged
+      ? [join(process.resourcesPath, 'cv', 'cv_main.py'), join(unpackedAppPath, 'cv', 'cv_main.py')]
+      : []),
+    join(appPath, 'cv', 'cv_main.py'),
     join(app.getPath('userData'), 'cv', 'cv_main.py')
   ]
 
@@ -176,6 +189,7 @@ function ensureCvProcess() {
   const scriptPath = getCvScriptPath()
   cvProcess = spawn(getPythonCommand(), ['-u', scriptPath], {
     cwd: dirname(scriptPath),
+    env: getCvProcessEnv(),
     stdio: ['pipe', 'pipe', 'pipe']
   })
 
@@ -211,7 +225,7 @@ function sendCommand(command) {
   processRef.stdin.write(`${JSON.stringify(command)}\n`)
 }
 
-function waitForCvReady(timeoutMs = 20000) {
+function waitForCvReady(timeoutMs = 60000) {
   if (cvReady) {
     return Promise.resolve(getCvStatus())
   }

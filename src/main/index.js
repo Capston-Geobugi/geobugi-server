@@ -131,7 +131,8 @@ function loadRenderer(window, route = '') {
     return
   }
 
-  window.loadFile(join(__dirname, '../renderer/index.html'))
+  const query = Object.fromEntries(new URLSearchParams(route.replace(/^\?/, '')))
+  window.loadFile(join(__dirname, '../renderer/index.html'), { query })
 }
 
 function applyWidgetSettingsToIdleWindow() {
@@ -491,3 +492,7 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+
+if (app.isPackaged) {
+  process.env.NODE_BINDINGS_ARROW = 'true'
+}

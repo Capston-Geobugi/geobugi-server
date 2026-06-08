@@ -4,6 +4,7 @@ import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
 
 import useTurtleController from '../hooks/useTurtleController'
 
+import turtleRiv from '../assets/turtle.riv?url'
 import BottomNav from '../components/BottomNav'
 import { getScoreToneClass } from '../lib/scoreTone'
 
@@ -26,7 +27,7 @@ function HomeScreen({
   const statusLabel = hasCalibration ? '기준 자세 저장 완료' : '기준 자세 측정 필요'
   const statusMark = hasCalibration ? '✓' : '!'
   const { rive, RiveComponent } = useRive({
-    src: '/src/assets/turtle.riv',
+    src: turtleRiv,
     stateMachines: 'State Machine 1',
     autoplay: true
   })

@@ -42,5 +42,54 @@
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "vite": "^7.2.6"
+  },
+  "build": {
+    "appId": "com.geobugi.app",
+    "productName": "Geobugi",
+    "directories": {
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "cv",
+        "to": "cv",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "**/cv/**",
+      "**/resources/**",
+      "**/*.py",
+      "**/*.exe",
+      "**/*_process*"
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.healthcare-fitness",
+      "identity": null,
+      "extendInfo": {
+        "com.apple.security.cs.disable-library-validation": true,
+        "com.apple.security.cs.allow-unsigned-executable-memory": true
+      }
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    }
   }
 }

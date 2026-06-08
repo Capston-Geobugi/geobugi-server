@@ -4,6 +4,7 @@ import useTurtleController from '../hooks/useTurtleController'
 import { useRive, useStateMachineInput } from '@rive-app/react-canvas'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { geobugiApi } from '../lib/api'
+import turtleRiv from '../assets/turtle.riv?url'
 
 const RIVE_LEFT_VISUAL_TRIM_RATIO = 0.18
 const RIVE_RIGHT_VISUAL_TRIM_RATIO = 0.18
@@ -39,7 +40,7 @@ function IdleScreen({
   const longPressTimerRef = useRef(null)
   const suppressClickRef = useRef(false)
   const { rive, RiveComponent } = useRive({
-    src: '/src/assets/turtle.riv',
+    src: turtleRiv,
     stateMachines: 'State Machine 1',
     shouldDisableRiveListeners: true,
     autoplay: true
