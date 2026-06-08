@@ -12,6 +12,8 @@ returns table (
   user_id uuid,
   score_date date,
   average_score numeric,
+  duration_score numeric,
+  shared_score numeric,
   sample_count integer,
   total_duration_sec integer,
   created_at timestamptz,
@@ -24,6 +26,8 @@ as $$
 declare
   current_user_id uuid := auth.uid();
   saved_score public.daily_posture_scores%rowtype;
+  normalized_duration_score numeric(5, 2);
+  normalized_shared_score numeric(5, 2);
 begin
   if current_user_id is null then
     raise exception 'Authentication is required.';
@@ -49,10 +53,17 @@ begin
     raise exception 'Total duration must be 0 or greater.';
   end if;
 
+  normalized_duration_score :=
+    round((least(target_total_duration_sec::numeric / 21600, 1) * 100), 2);
+  normalized_shared_score :=
+    round(((target_average_score * 0.7) + (normalized_duration_score * 0.3)), 2);
+
   insert into public.daily_posture_scores as dps (
     user_id,
     score_date,
     average_score,
+    duration_score,
+    shared_score,
     sample_count,
     total_duration_sec
   )
@@ -60,11 +71,15 @@ begin
     current_user_id,
     target_score_date,
     round(target_average_score, 2),
+    normalized_duration_score,
+    normalized_shared_score,
     target_sample_count,
     target_total_duration_sec
   )
   on conflict on constraint daily_posture_scores_user_id_score_date_key do update
     set average_score = excluded.average_score,
+        duration_score = excluded.duration_score,
+        shared_score = excluded.shared_score,
         sample_count = excluded.sample_count,
         total_duration_sec = excluded.total_duration_sec
   returning dps.* into saved_score;
@@ -75,6 +90,8 @@ begin
     saved_score.user_id,
     saved_score.score_date,
     saved_score.average_score,
+    saved_score.duration_score,
+    saved_score.shared_score,
     saved_score.sample_count,
     saved_score.total_duration_sec,
     saved_score.created_at,
