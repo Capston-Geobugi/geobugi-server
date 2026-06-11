@@ -215,6 +215,11 @@ function App() {
     setStretchingTimerStartedAt(Date.now())
   }, [])
 
+  const showStretchingReminderNow = useCallback(() => {
+    setStretchingTimerStartedAt(Date.now())
+    setStretchingReminderVisible(true)
+  }, [])
+
   const bootstrapServerState = useCallback(async () => {
     setBootMessage('앱 설정을 불러오고 있어요')
     setBootProgress(12)
@@ -231,7 +236,12 @@ function App() {
     setCalibration(activeCalibration)
     setSettings(appSettings)
     stretchingIntervalRef.current = Number(appSettings?.stretching?.intervalMinutes ?? 60)
-    restartStretchingTimer()
+
+    if (initialScreen === 'idle' && activeCalibration) {
+      showStretchingReminderNow()
+    } else {
+      restartStretchingTimer()
+    }
 
     if (shouldPrepareCvOnBoot) {
       setBootMessage('자세 측정 엔진을 준비하고 있어요')
@@ -241,7 +251,14 @@ function App() {
     }
 
     setBootReady(true)
-  }, [refreshMonthlyReport, refreshReport, restartStretchingTimer, shouldPrepareCvOnBoot])
+  }, [
+    initialScreen,
+    refreshMonthlyReport,
+    refreshReport,
+    restartStretchingTimer,
+    shouldPrepareCvOnBoot,
+    showStretchingReminderNow
+  ])
 
   const handleCalibrationDone = useCallback(
     async (payload) => {
@@ -523,7 +540,7 @@ function App() {
     await geobugiApi.startCvMonitoring()
     setIsCvMonitoring(true)
     setPaused(false)
-    restartStretchingTimer()
+    showStretchingReminderNow()
 
     if (window.api?.appWindow?.openIdle) {
       await window.api.appWindow.openIdle()

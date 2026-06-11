@@ -312,6 +312,10 @@ button:disabled {
 }
 
 .home-greeting {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin: 0;
 }
 
@@ -325,6 +329,55 @@ button:disabled {
 
 .home-greeting h1 span {
   font-weight: 500;
+}
+
+.home-point-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 88px;
+  min-height: 40px;
+  margin-top: 10px;
+  padding: 8px 11px 8px 8px;
+  border: 1px solid #dce6ef;
+  border-radius: 12px;
+  color: #172237;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(26, 44, 65, 0.04);
+}
+
+.home-point-badge > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #18bd84;
+  background: #e2fbef;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.home-point-badge div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.home-point-badge small {
+  color: #8a9ab0;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.home-point-badge strong {
+  color: #172237;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1;
 }
 
 .auth-screen {
@@ -2553,6 +2606,11 @@ button:disabled {
 
   .home-greeting h1 {
     font-size: 27px;
+  }
+
+  .home-point-badge {
+    min-width: 82px;
+    padding-right: 9px;
   }
 
   .home-score-summary strong {

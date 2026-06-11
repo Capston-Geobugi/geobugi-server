@@ -18,7 +18,8 @@ function HomeScreen({
   onReport,
   onSocial,
   onSettings,
-  neckStage
+  neckStage,
+  pointBalance = 126
 }) {
   const greetingName = String(displayName ?? '').trim() || '거부기'
   const hasScore = typeof score === 'number'
@@ -52,6 +53,13 @@ function HomeScreen({
             {greetingName}
             <span>님. 🐢</span>
           </h1>
+          <div className="home-point-badge" aria-label={`내 포인트 ${pointBalance}`}>
+            <span>P</span>
+            <div>
+              <small>내 포인트</small>
+              <strong>{pointBalance}</strong>
+            </div>
+          </div>
         </header>
 
         <section className="home-score-summary" aria-label={scoreTitle}>
